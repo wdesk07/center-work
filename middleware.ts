@@ -23,8 +23,18 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return NextResponse.redirect(loginUrl);
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return NextResponse.redirect(loginUrl);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return NextResponse.redirect(loginUrl);
+
+  const ownerCheck = await fetch(`${url}/functions/v1/wdesk-control-api`, {
+    headers: { apikey:key, Authorization:`Bearer ${token}` },
+    cache:"no-store",
+  });
+  if (ownerCheck.status === 403) return NextResponse.redirect(new URL("/activate-owner", request.url));
+  if (!ownerCheck.ok) return new NextResponse("Contrôle d’accès temporairement indisponible.", { status:503 });
   return response;
 }
 
