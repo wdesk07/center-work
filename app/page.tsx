@@ -57,7 +57,7 @@ export default function Home() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Lecture du centre indisponible.");
         if (!active) return;
-        setLiveAuditCount(Array.isArray(data.recent_audit) ? data.recent_audit.length : 0);
+        setLiveAuditCount(typeof data.audit_total === "number" ? data.audit_total : 0);
         setLiveConnectedCount(Array.isArray(data.projects) ? data.projects.filter((p: { connection_status?: string }) => p.connection_status === "connected").length : 0);
       })
       .catch(error => { if (active) setLiveError(error instanceof Error ? error.message : "Erreur de synchronisation."); });
