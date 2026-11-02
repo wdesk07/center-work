@@ -11,11 +11,13 @@ type ModuleKey = "overview" | "diagnostics" | "projects" | "supabase" | "hosting
 type Project = { id?: string; platform: string; project_name: string; environment: string; external_ref?: string | null; dashboard_url?: string | null; connection_status: string; notes?: string | null; updated_at?: string };
 type AuditEvent = { id: number; occurred_at: string; actor_email?: string; action: string; target_type?: string; target_ref?: string; environment: string; outcome: string; details?: Record<string, unknown> };
 type DiagnosticCheck = { component: string; check_name: string; count: number; status: string; explanation: string };
-type Diagnostics = { checked_at: string; environment: string; source: string; overall: string; checks: DiagnosticCheck[]; daily_attendance_records_today: number; limitations: string[] };
-type Dashboard = { owner?: { email: string; display_name: string; role: string }; environment?: string; projects?: Project[]; recent_audit?: AuditEvent[]; audit_total?: number; diagnostics?: Diagnostics; capabilities?: { provider_operations?: boolean; diagnostics_read?: boolean } };
+type Diagnostics = { checked_at: string; environment: string; source: string; overall: string; checks: DiagnosticCheck[]; daily_attendance_records_today: number; qr_requests_pending_total?: number; limitations: string[] };
+type Incident = { id: string; fingerprint: string; component: string; severity: string; status: string; title: string; summary: string; first_seen_at: string; last_seen_at: string; occurrence_count: number; resolved_at?: string | null };
+type Dashboard = { owner?: { email: string; display_name: string; role: string }; environment?: string; projects?: Project[]; recent_audit?: AuditEvent[]; audit_total?: number; diagnostics?: Diagnostics; incidents?: Incident[]; capabilities?: { provider_operations?: boolean; diagnostics_read?: boolean; incident_tracking?: boolean } };
 
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
-  { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },\n  { key: "diagnostics", label: "Diagnostics & incidents", icon: Activity, group: "ESPACE DE TRAVAIL" },
+  { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
+  { key: "diagnostics", label: "Diagnostics & incidents", icon: Activity, group: "ESPACE DE TRAVAIL" },
   { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },
   { key: "supabase", label: "Supabase", icon: Database, group: "PILOTAGE" },
   { key: "hosting", label: "Hébergement Vercel", icon: Cloud, group: "PILOTAGE" },
@@ -27,7 +29,8 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
-  diagnostics: { title: "Diagnostics & incidents", intro: "Contrôles agrégés en direct sur les données TEST. Les limites de mesure sont affichées explicitement." },\n  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
+  diagnostics: { title: "Diagnostics & incidents", intro: "Contrôles agrégés en direct sur les données TEST. Les limites de mesure sont affichées explicitement." },
+  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
   supabase: { title: "Supabase", intro: "Accès à la console, inventaire des projets et état de la liaison du registre." },
   hosting: { title: "Hébergement Vercel", intro: "Accès à la console Vercel et au déploiement du centre. Les commandes API attendent une intégration sécurisée." },
   github: { title: "Code & dépôts", intro: "Accès aux dépôts WDESK et au code du centre. Les opérations d’écriture seront protégées et auditées." },
@@ -72,7 +75,9 @@ export default function Home() {
   useEffect(() => { void refresh(); }, []);
 
   const projects = data?.projects ?? [];
-  const audits = data?.recent_audit ?? [];\n  const diagnostics = data?.diagnostics;
+  const audits = data?.recent_audit ?? [];
+  const diagnostics = data?.diagnostics;
+  const incidents = data?.incidents ?? [];
   const filteredProjects = useMemo(() => projects.filter(p => (p.project_name + p.platform + p.environment + (p.notes ?? "")).toLowerCase().includes(query.toLowerCase())), [projects, query]);
   const current = descriptions[active];
 
@@ -134,6 +139,7 @@ export default function Home() {
 
           {active === "diagnostics" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Contrôles automatiques</h3><p>{diagnostics ? "Dernière lecture : " + new Date(diagnostics.checked_at).toLocaleString("fr-FR") : "Aucun résultat de diagnostic disponible."}</p></div><Status tone={diagnostics?.overall === "no_detected_queue_anomaly" ? "good" : diagnostics ? "warn" : "muted"}>{diagnostics?.overall === "no_detected_queue_anomaly" ? "Aucune anomalie de file détectée" : diagnostics ? "Vérification nécessaire" : "Non vérifié"}</Status></div>
+            {incidents.length > 0 && <><div className="section-title"><div><h2>Incidents suivis</h2><p>Incidents persistants enregistrés par le moteur de diagnostic.</p></div><span className="count-pill">{incidents.filter(x => x.status === "open").length} ouverts</span></div><div className="audit-list">{incidents.map(incident => <div className="audit-row" key={incident.id}><div><b>{incident.title}</b><small>{incident.summary} · Dernière détection : {new Date(incident.last_seen_at).toLocaleString("fr-FR")} · {incident.occurrence_count} détection(s)</small></div><Status tone={incident.status === "open" ? "warn" : "good"}>{incident.status === "open" ? "Ouvert" : "Résolu"}</Status></div>)}</div></>}
             {diagnostics?.checks?.length ? <div className="audit-list">{diagnostics.checks.map((check) => <div className="audit-row" key={check.component + check.check_name}><div><b>{check.component} · {check.check_name}</b><small>{check.explanation}</small></div><Status tone={check.count > 0 ? "warn" : "good"}>{check.count} élément(s)</Status></div>)}</div> : <div className="empty-state"><b>Diagnostic non disponible</b><span>Actualisez le centre pour relancer les contrôles.</span></div>}
             <div className="section-title"><div><h2>Limites actuelles de surveillance</h2><p>Ces points ne sont pas présentés comme vérifiés tant que les sources ne sont pas connectées.</p></div></div>
             <div className="security-list">{(diagnostics?.limitations ?? ["Le GPS des appareils n’est pas mesuré en continu.", "La réception réelle des notifications sur chaque téléphone n’est pas vérifiée.", "Les journaux Vercel et les erreurs navigateur ne sont pas encore connectés."]).map((item, i) => <div key={i}><span>{item}</span><Status tone="warn">Non surveillé</Status></div>)}</div>
