@@ -7,13 +7,15 @@ import {
   Search, Settings, ShieldCheck, Users, X, RefreshCw, ExternalLink, ClipboardList
 } from "lucide-react";
 
-type ModuleKey = "overview" | "projects" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
+type ModuleKey = "overview" | "diagnostics" | "projects" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
 type Project = { id?: string; platform: string; project_name: string; environment: string; external_ref?: string | null; dashboard_url?: string | null; connection_status: string; notes?: string | null; updated_at?: string };
 type AuditEvent = { id: number; occurred_at: string; actor_email?: string; action: string; target_type?: string; target_ref?: string; environment: string; outcome: string; details?: Record<string, unknown> };
-type Dashboard = { owner?: { email: string; display_name: string; role: string }; environment?: string; projects?: Project[]; recent_audit?: AuditEvent[]; audit_total?: number; capabilities?: { provider_operations?: boolean } };
+type DiagnosticCheck = { component: string; check_name: string; count: number; status: string; explanation: string };
+type Diagnostics = { checked_at: string; environment: string; source: string; overall: string; checks: DiagnosticCheck[]; daily_attendance_records_today: number; limitations: string[] };
+type Dashboard = { owner?: { email: string; display_name: string; role: string }; environment?: string; projects?: Project[]; recent_audit?: AuditEvent[]; audit_total?: number; diagnostics?: Diagnostics; capabilities?: { provider_operations?: boolean; diagnostics_read?: boolean } };
 
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
-  { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
+  { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },\n  { key: "diagnostics", label: "Diagnostics & incidents", icon: Activity, group: "ESPACE DE TRAVAIL" },
   { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },
   { key: "supabase", label: "Supabase", icon: Database, group: "PILOTAGE" },
   { key: "hosting", label: "Hébergement Vercel", icon: Cloud, group: "PILOTAGE" },
@@ -25,7 +27,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
-  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
+  diagnostics: { title: "Diagnostics & incidents", intro: "Contrôles agrégés en direct sur les données TEST. Les limites de mesure sont affichées explicitement." },\n  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
   supabase: { title: "Supabase", intro: "Accès à la console, inventaire des projets et état de la liaison du registre." },
   hosting: { title: "Hébergement Vercel", intro: "Accès à la console Vercel et au déploiement du centre. Les commandes API attendent une intégration sécurisée." },
   github: { title: "Code & dépôts", intro: "Accès aux dépôts WDESK et au code du centre. Les opérations d’écriture seront protégées et auditées." },
@@ -70,7 +72,7 @@ export default function Home() {
   useEffect(() => { void refresh(); }, []);
 
   const projects = data?.projects ?? [];
-  const audits = data?.recent_audit ?? [];
+  const audits = data?.recent_audit ?? [];\n  const diagnostics = data?.diagnostics;
   const filteredProjects = useMemo(() => projects.filter(p => (p.project_name + p.platform + p.environment + (p.notes ?? "")).toLowerCase().includes(query.toLowerCase())), [projects, query]);
   const current = descriptions[active];
 
@@ -105,6 +107,11 @@ export default function Home() {
 
           {active === "overview" && <>
             <div className="welcome-banner"><div className="welcome-icon"><Gauge size={24}/></div><div><span>ESPACE PROPRIÉTAIRE</span><h2>Un centre unique pour vos infrastructures.</h2><p>Les statuts reflètent les données réellement retournées par l’API du centre.</p></div><div className="banner-orb orb-one"/><div className="banner-orb orb-two"/></div>
+            <div className="section-title"><div><h2>Surveillance opérationnelle</h2><p>Les premiers contrôles automatiques sont actifs sur Aéro Service TEST.</p></div><button className="subtle-button" onClick={() => choose("diagnostics")}>Ouvrir les diagnostics <ArrowUpRight size={15}/></button></div>
+            <div className="stats-grid">
+              <article className="stat-card"><div className="stat-top"><span>Alertes à examiner</span><Activity size={18}/></div><strong>{diagnostics ? diagnostics.checks.filter(x => x.count > 0).length : "…"}</strong><small>Files d’attente ou échecs détectés en TEST</small></article>
+              <article className="stat-card"><div className="stat-top"><span>Pointages aujourd’hui</span><ClipboardList size={18}/></div><strong>{diagnostics ? diagnostics.daily_attendance_records_today : "…"}</strong><small>Enregistrements journaliers · TEST</small></article>
+            </div>
             <div className="section-title"><div><h2>État des infrastructures</h2><p>{loading ? "Lecture du registre…" : `${projects.length} élément(s) dans le registre sécurisé`}</p></div><button className="subtle-button" onClick={() => void refresh()}>Actualiser <RefreshCw size={15}/></button></div>
             <div className="stats-grid">
               <article className="stat-card"><div className="stat-top"><span>Projets recensés</span><Blocks size={18}/></div><strong>{loading ? "…" : String(projects.length).padStart(2, "0")}</strong><small>Registre du centre, pas un scan complet des comptes</small></article>
@@ -124,6 +131,14 @@ export default function Home() {
               <article className="panel"><div className="panel-heading"><div><h3>État de sécurité</h3><p>État connu, sans masquer les éléments manquants</p></div><ShieldCheck size={19}/></div><div className="security-list"><div><span>Identité propriétaire</span><Status tone={data?.owner ? "good" : "warn"}>{data?.owner ? "Vérifiée" : "À vérifier"}</Status></div><div><span>Registre / audit</span><Status tone={data ? "good" : "warn"}>{data ? "API accessible" : "Indisponible"}</Status></div><div><span>Opérations fournisseur depuis l’interface</span><Status tone="warn">Pas encore activées</Status></div><div><span>Backend indépendant du TEST Aéro</span><Status tone="warn">À mettre en place</Status></div></div></article>
             </div>
           </>}
+
+          {active === "diagnostics" && <div className="panel project-panel">
+            <div className="panel-heading"><div><h3>Contrôles automatiques</h3><p>{diagnostics ? "Dernière lecture : " + new Date(diagnostics.checked_at).toLocaleString("fr-FR") : "Aucun résultat de diagnostic disponible."}</p></div><Status tone={diagnostics?.overall === "no_detected_queue_anomaly" ? "good" : diagnostics ? "warn" : "muted"}>{diagnostics?.overall === "no_detected_queue_anomaly" ? "Aucune anomalie de file détectée" : diagnostics ? "Vérification nécessaire" : "Non vérifié"}</Status></div>
+            {diagnostics?.checks?.length ? <div className="audit-list">{diagnostics.checks.map((check) => <div className="audit-row" key={check.component + check.check_name}><div><b>{check.component} · {check.check_name}</b><small>{check.explanation}</small></div><Status tone={check.count > 0 ? "warn" : "good"}>{check.count} élément(s)</Status></div>)}</div> : <div className="empty-state"><b>Diagnostic non disponible</b><span>Actualisez le centre pour relancer les contrôles.</span></div>}
+            <div className="section-title"><div><h2>Limites actuelles de surveillance</h2><p>Ces points ne sont pas présentés comme vérifiés tant que les sources ne sont pas connectées.</p></div></div>
+            <div className="security-list">{(diagnostics?.limitations ?? ["Le GPS des appareils n’est pas mesuré en continu.", "La réception réelle des notifications sur chaque téléphone n’est pas vérifiée.", "Les journaux Vercel et les erreurs navigateur ne sont pas encore connectés."]).map((item, i) => <div key={i}><span>{item}</span><Status tone="warn">Non surveillé</Status></div>)}</div>
+            <div className="notice"><Activity size={17}/>Source : {diagnostics?.source ?? "Aucune"} · Environnement : {diagnostics?.environment ?? "inconnu"}. Ces contrôles portent sur les files et enregistrements, pas sur le fonctionnement physique de chaque appareil.</div>
+          </div>}
 
           {active === "projects" && <div className="panel project-panel"><div className="panel-heading"><div><h3>Inventaire des projets</h3><p>Données issues du registre sécurisé, sans projets fictifs ajoutés à l’écran.</p></div><span className="count-pill">{projects.length} éléments</span></div><div className="search-field"><Search size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un projet…"/></div><div className="project-list">{filteredProjects.map(p => <article className="project-row" key={p.id ?? p.project_name}><div className="project-symbol">{p.platform === "supabase" ? <Database/> : p.platform === "vercel" ? <Cloud/> : p.platform === "github" ? <Github/> : <Code2/>}</div><div className="project-info"><b>{p.project_name}</b><span>{p.platform} · {p.notes ?? p.external_ref ?? "Aucune note"}</span></div><div className="project-meta"><small>{p.environment}</small><Status tone={p.connection_status === "connected" ? "good" : p.connection_status === "degraded" ? "warn" : "muted"}>{p.connection_status}</Status></div>{p.dashboard_url && <ProviderLink href={p.dashboard_url}>Console</ProviderLink>}</article>)}{!loading && filteredProjects.length === 0 && <div className="empty-state"><b>Aucun projet correspondant</b><span>Le registre ne contient aucun résultat pour cette recherche.</span></div>}</div></div>}
 
