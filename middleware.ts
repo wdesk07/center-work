@@ -6,6 +6,15 @@ export async function middleware(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const loginUrl = new URL("/login", request.url);
 
+  // Some previously issued magic links may return to the site root with the
+  // PKCE code. Exchange it through the dedicated callback before owner checks.
+  const authCode = request.nextUrl.searchParams.get("code");
+  if (authCode) {
+    const callbackUrl = new URL("/auth/callback", request.url);
+    callbackUrl.searchParams.set("code", authCode);
+    return NextResponse.redirect(callbackUrl);
+  }
+
   if (!url || !key) {
     loginUrl.searchParams.set("setup", "required");
     return NextResponse.redirect(loginUrl);
