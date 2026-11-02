@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowUpRight, Bell, Blocks, Box, BriefcaseBusiness, ChevronDown,
   CircleHelp, Cloud, Code2, Database, Gauge, Github, HardDrive, LayoutDashboard,
@@ -46,6 +46,23 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [liveAuditCount, setLiveAuditCount] = useState<number | null>(null);
+  const [liveConnectedCount, setLiveConnectedCount] = useState<number | null>(null);
+  const [liveError, setLiveError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/control", { cache: "no-store" })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "Lecture du centre indisponible.");
+        if (!active) return;
+        setLiveAuditCount(Array.isArray(data.recent_audit) ? data.recent_audit.length : 0);
+        setLiveConnectedCount(Array.isArray(data.projects) ? data.projects.filter((p: { connection_status?: string }) => p.connection_status === "connected").length : 0);
+      })
+      .catch(error => { if (active) setLiveError(error instanceof Error ? error.message : "Erreur de synchronisation."); });
+    return () => { active = false; };
+  }, []);
   const filteredProjects = useMemo(() => projects.filter(p => (p.name + p.platform + p.env).toLowerCase().includes(query.toLowerCase())), [query]);
   const current = descriptions[active];
 
@@ -112,9 +129,9 @@ export default function Home() {
             <div className="section-title"><div><h2>État des infrastructures</h2><p>État de référence connu à la création du centre</p></div><button className="subtle-button" onClick={() => choose("projects")}>Voir l’inventaire <ArrowUpRight size={15}/></button></div>
             <div className="stats-grid">
               <article className="stat-card"><div className="stat-top"><span>Projets recensés</span><Blocks size={18}/></div><strong>03</strong><small>Production, test et centre</small></article>
-              <article className="stat-card"><div className="stat-top"><span>Services connectés</span><Activity size={18}/></div><strong>01</strong><small>Hôte Supabase TEST</small></article>
+              <article className="stat-card"><div className="stat-top"><span>Services connectés</span><Activity size={18}/></div><strong>{liveConnectedCount === null ? "…" : String(liveConnectedCount).padStart(2, "0")}</strong><small>Connexions vérifiées dans le registre</small></article>
               <article className="stat-card"><div className="stat-top"><span>Accès propriétaire</span><LockKeyhole size={18}/></div><strong>À valider</strong><small>Identité Auth non liée</small></article>
-              <article className="stat-card"><div className="stat-top"><span>Événements d’audit</span><ShieldCheck size={18}/></div><strong>0</strong><small>Journal prêt à recevoir</small></article>
+              <article className="stat-card"><div className="stat-top"><span>Événements d’audit</span><ShieldCheck size={18}/></div><strong>{liveAuditCount === null ? "…" : liveAuditCount}</strong><small>{liveError || "Événements récents du journal sécurisé"}</small></article>
             </div>
             <div className="section-title"><div><h2>Accès rapides</h2><p>Ouvrir un domaine de gestion</p></div></div>
             <div className="quick-grid">
