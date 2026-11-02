@@ -30,12 +30,21 @@ export async function middleware(request: NextRequest) {
   if (!token) return NextResponse.redirect(loginUrl);
 
   const ownerCheck = await fetch(`${url}/functions/v1/wdesk-control-api`, {
-    headers: { apikey:key, Authorization:`Bearer ${token}` },
-    cache:"no-store",
+    headers: { apikey: key, Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
+
+  if (ownerCheck.status === 401) return NextResponse.redirect(loginUrl);
   if (ownerCheck.status === 403) return NextResponse.redirect(new URL("/activate-owner", request.url));
-  if (!ownerCheck.ok) return new NextResponse("Contrôle d’accès temporairement indisponible.", { status:503 });
+  if (!ownerCheck.ok) {
+    return new NextResponse("Le contrôle d’accès est momentanément indisponible. Réessayez dans quelques instants.", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }
   return response;
 }
 
-export const config = { matcher: ["/", "/api/control/:path*"] };
+// The API route performs its own session check and the Edge Function enforces
+// the owner allowlist. Excluding it here is required for first-time activation.
+export const config = { matcher: ["/"] };
