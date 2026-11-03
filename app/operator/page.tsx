@@ -58,11 +58,12 @@ export default function OperatorPage() {
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState<{title:string;lines:string[];limitation?:string} | null>(null);
   const [lastQuery, setLastQuery] = useState("");
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
 
   async function submit(value = query) {
     const clean = value.trim();
     if (!clean || busy) return;
-    setQuery(clean); setLastQuery(clean); setBusy(true); setError(""); setAnswer(null);
+    setQuery(clean); setLastQuery(clean); setBusy(true); setError(""); setAnswer(null); setCheckedAt(null);
     try {
       const response = await fetch("/api/control", { cache: "no-store" });
       const raw = await response.text();
@@ -70,6 +71,7 @@ export default function OperatorPage() {
       try { data = raw ? JSON.parse(raw) as Result : {}; } catch { throw new Error("La réponse du centre est illisible."); }
       if (!response.ok) throw new Error(response.status === 401 ? "Ta session propriétaire a expiré. Reconnecte-toi." : "Le centre n'a pas pu lire ses données.");
       setAnswer(summarize(clean, data));
+      setCheckedAt(data.diagnostics?.checked_at ?? null);
     } catch (e) { setError(e instanceof Error ? e.message : "Consultation impossible."); }
     finally { setBusy(false); }
   }
@@ -92,7 +94,7 @@ export default function OperatorPage() {
       <div className={styles.spaced}><p className={styles.sectionLabel}>EXEMPLES DE DEMANDES</p><div className={styles.suggestionGrid}>{suggestions.map(s=><button key={s} onClick={()=>{setQuery(s);void submit(s);}} disabled={busy} className={styles.suggestion}>{s}</button>)}</div></div>
       {busy&&<div className={styles.loading}><Loader2 className={styles.spinner} size={17}/> Lecture des données réelles du centre…</div>}
       {error&&<div role="alert" className={styles.error}><CircleAlert size={18} className={styles.shrink}/>{error}</div>}
-      {answer&&<article className={styles.resultCard}><div className={styles.inlineFlex}><CheckCircle2 size={18} className={styles.successText}/><span className={styles.resultEyebrow}>RÉSULTAT DE CONSULTATION</span></div><h2 className={styles.resultTitle}>{answer.title}</h2><p className={styles.queryText}>Demande : {lastQuery}</p><ul className={styles.resultList}>{answer.lines.map((line,i)=><li key={i} className={styles.resultItem}><span className={styles.bullet}/>{line}</li>)}</ul>{answer.limitation&&<div className={styles.limitation}><b className={styles.darkText}>Limite de cette vérification :</b> {answer.limitation}</div>}<div className={styles.readOnly}><LockKeyhole size={13}/> Consultation · données métier inchangées · contrôles WDESK actualisés</div></article>}
+      {answer&&<article className={styles.resultCard}><div className={styles.inlineFlex}><Bot size={18}/><span className={styles.resultEyebrow}>DONNÉES RETOURNÉES PAR LE CENTRE</span></div><h2 className={styles.resultTitle}>{answer.title}</h2>{checkedAt&&<p className={styles.queryText}>Contrôles actualisés le {new Date(checkedAt).toLocaleString("fr-FR")}</p>}<p className={styles.queryText}>Demande : {lastQuery}</p><ul className={styles.resultList}>{answer.lines.map((line,i)=><li key={i} className={styles.resultItem}><span className={styles.bullet}/>{line}</li>)}</ul>{answer.limitation&&<div className={styles.limitation}><b className={styles.darkText}>Limite de cette vérification :</b> {answer.limitation}</div>}<div className={styles.readOnly}><LockKeyhole size={13}/> Consultation · données métier inchangées · contrôles WDESK actualisés</div></article>}
       <div className={styles.nextStep}><Wrench size={17} className={styles.toolIcon}/><p className={styles.nextStepText}><b className={styles.nextStepStrong}>Prochaine évolution :</b> connecter le moteur IA, puis ajouter les outils d'analyse approfondie et de correction avec validation propriétaire. Les demandes d'écriture resteront bloquées tant que l'autorisation et les vérifications de sécurité ne sont pas réunies.</p></div>
     </section>
   </main>;
