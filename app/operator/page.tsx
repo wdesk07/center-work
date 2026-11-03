@@ -47,7 +47,7 @@ function summarize(query: string, data: Result): { title: string; lines: string[
     for (const e of events) lines.push(`${e.action ?? "Action"} — ${e.outcome ?? "résultat inconnu"} — ${e.occurred_at ? new Date(e.occurred_at).toLocaleString("fr-FR") : "date non fournie"}.`);
     return { title: "Journal d'audit", lines, limitation: "Seuls les événements renvoyés par l'API du centre sont affichés." };
   }
-  return { title: "Demande non encore prise en charge", lines: ["Je n'ai pas encore de moteur IA connecté pour comprendre toutes les demandes libres.", "Pour l'instant, je peux exécuter quelques consultations réelles en lecture seule : bilan des projets, incidents, présences et journal d'audit."], limitation: "Aucune modification n'a été effectuée." };
+  return { title: "Demande non encore prise en charge", lines: ["Je n'ai pas encore de moteur IA connecté pour comprendre toutes les demandes libres.", "Pour l'instant, je peux exécuter quelques consultations réelles en lecture seule : bilan des projets, incidents, présences et journal d'audit."], limitation: "Aucune donnée métier d’Aéro Service n’a été modifiée. Les contrôles internes WDESK ont pu être actualisés." };
 }
 
 export default function OperatorPage() {
@@ -80,7 +80,7 @@ export default function OperatorPage() {
     <section className={styles.container}>
       <div className={styles.intro}>
         <div className={styles.botIcon}><Bot size={25}/></div>
-        <div><p className={styles.eyebrow}>WDESK · OPÉRATEUR</p><h1 className={styles.heading}>Que veux-tu que je vérifie ?</h1><p className={styles.description}>Écris normalement. Le mode initial peut déjà consulter les données réelles du centre en lecture seule. Les corrections et commandes techniques ne sont pas encore activées.</p></div>
+        <div><p className={styles.eyebrow}>WDESK · OPÉRATEUR</p><h1 className={styles.heading}>Que veux-tu que je vérifie ?</h1><p className={styles.description}>Écris normalement. Le mode initial consulte les données réelles du centre et actualise ses contrôles internes. Il ne modifie pas les données métier d’Aéro Service. Les corrections et commandes techniques ne sont pas encore activées.</p></div>
       </div>
       <div className={styles.panel}>
         <label htmlFor="operator-query" className={styles.fieldLabel}>Ta demande</label>
@@ -90,7 +90,7 @@ export default function OperatorPage() {
       <div className={styles.spaced}><p className={styles.sectionLabel}>EXEMPLES DE DEMANDES</p><div className={styles.suggestionGrid}>{suggestions.map(s=><button key={s} onClick={()=>{setQuery(s);void submit(s);}} disabled={busy} className={styles.suggestion}>{s}</button>)}</div></div>
       {busy&&<div className={styles.loading}><Loader2 className={styles.spinner} size={17}/> Lecture des données réelles du centre…</div>}
       {error&&<div role="alert" className={styles.error}><CircleAlert size={18} className={styles.shrink}/>{error}</div>}
-      {answer&&<article className={styles.resultCard}><div className={styles.inlineFlex}><CheckCircle2 size={18} className={styles.successText}/><span className={styles.resultEyebrow}>RÉSULTAT DE CONSULTATION</span></div><h2 className={styles.resultTitle}>{answer.title}</h2><p className={styles.queryText}>Demande : {lastQuery}</p><ul className={styles.resultList}>{answer.lines.map((line,i)=><li key={i} className={styles.resultItem}><span className={styles.bullet}/>{line}</li>)}</ul>{answer.limitation&&<div className={styles.limitation}><b className={styles.darkText}>Limite de cette vérification :</b> {answer.limitation}</div>}<div className={styles.readOnly}><LockKeyhole size={13}/> Lecture seule · aucune donnée modifiée</div></article>}
+      {answer&&<article className={styles.resultCard}><div className={styles.inlineFlex}><CheckCircle2 size={18} className={styles.successText}/><span className={styles.resultEyebrow}>RÉSULTAT DE CONSULTATION</span></div><h2 className={styles.resultTitle}>{answer.title}</h2><p className={styles.queryText}>Demande : {lastQuery}</p><ul className={styles.resultList}>{answer.lines.map((line,i)=><li key={i} className={styles.resultItem}><span className={styles.bullet}/>{line}</li>)}</ul>{answer.limitation&&<div className={styles.limitation}><b className={styles.darkText}>Limite de cette vérification :</b> {answer.limitation}</div>}<div className={styles.readOnly}><LockKeyhole size={13}/> Consultation · données métier inchangées · contrôles WDESK actualisés</div></article>}
       <div className={styles.nextStep}><Wrench size={17} className={styles.toolIcon}/><p className={styles.nextStepText}><b className={styles.nextStepStrong}>Prochaine évolution :</b> connecter le moteur IA, puis ajouter les outils d'analyse approfondie et de correction avec validation propriétaire. Les demandes d'écriture resteront bloquées tant que l'autorisation et les vérifications de sécurité ne sont pas réunies.</p></div>
     </section>
   </main>;
