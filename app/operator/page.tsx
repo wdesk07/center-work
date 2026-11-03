@@ -70,6 +70,8 @@ export default function OperatorPage() {
       let data: Result = {};
       try { data = raw ? JSON.parse(raw) as Result : {}; } catch { throw new Error("La réponse du centre est illisible."); }
       if (!response.ok) throw new Error(response.status === 401 ? "Ta session propriétaire a expiré. Reconnecte-toi." : "Le centre n'a pas pu lire ses données.");
+      const hasExpectedPayload = Array.isArray(data.projects) || Array.isArray(data.incidents) || Array.isArray(data.diagnostics?.checks) || Array.isArray(data.recent_audit) || Boolean(data.diagnostics?.checked_at);
+      if (!hasExpectedPayload) throw new Error("Le centre a répondu, mais les données attendues sont absentes. Je préfère signaler cette anomalie plutôt que d'afficher un bilan vide comme s'il était fiable.");
       setAnswer(summarize(clean, data));
       setCheckedAt(data.diagnostics?.checked_at ?? null);
     } catch (e) { setError(e instanceof Error ? e.message : "Consultation impossible."); }
