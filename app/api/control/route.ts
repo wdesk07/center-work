@@ -17,8 +17,14 @@ export async function GET() {
     },
   });
 
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session?.access_token) {
+  // Validate the user against Supabase Auth on the server before trusting the session.
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    return NextResponse.json({ error: "authentication_required" }, { status: 401 });
+  }
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData.session?.access_token) {
     return NextResponse.json({ error: "authentication_required" }, { status: 401 });
   }
 
@@ -26,7 +32,7 @@ export async function GET() {
     method: "GET",
     headers: {
       apikey: key,
-      Authorization: `Bearer ${data.session.access_token}`,
+      Authorization: `Bearer ${sessionData.session.access_token}`,
       "Content-Type": "application/json",
     },
     cache: "no-store",
