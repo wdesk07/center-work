@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, fix/auth-callback-cookie-test]
 
 jobs:
   build:
