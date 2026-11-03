@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Bot, CheckCircle2, CircleAlert, Loader2, LockKeyhole, Send, ShieldCheck, Wrench } from "lucide-react";
+import { ArrowLeft, Bot, CircleAlert, Loader2, LockKeyhole, Send, ShieldCheck, Wrench } from "lucide-react";
 import Link from "next/link";
 import styles from "./operator.module.css";
 
