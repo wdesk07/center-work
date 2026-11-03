@@ -8,7 +8,7 @@ import styles from "./operator.module.css";
 type Check = { component?: string; check_name?: string; count?: number; status?: string; explanation?: string };
 type Incident = { title?: string; summary?: string; status?: string; severity?: string; last_seen_at?: string };
 type Project = { project_name?: string; platform?: string; environment?: string; connection_status?: string };
-type Result = { owner?: { email?: string }; projects?: Project[]; diagnostics?: { checked_at?: string; overall?: string; checks?: Check[]; limitations?: string[] }; incidents?: Incident[]; audit_total?: number; recent_audit?: Array<{ action?: string; outcome?: string; occurred_at?: string }> };
+type Result = { owner?: { email?: string }; projects?: Project[]; diagnostics?: { checked_at?: string; overall?: string; checks?: Check[]; limitations?: string[] }; incidents?: Incident[]; audit_total?: number; recent_audit?: Array<{ action?: string; outcome?: string; occurred_at?: string; actor_email?: string; target_type?: string; target_ref?: string; environment?: string }> };
 
 const suggestions = [
   "Fais-moi un bilan de tous mes projets",
@@ -28,10 +28,12 @@ function summarize(query: string, data: Result): { title: string; lines: string[
   }
   if (/erreur|incident|panne|problème|anomalie/.test(q)) {
     const incidents = data.incidents ?? [];
-    lines.push(`Incidents retournés par le centre : ${incidents.length}.`);
-    for (const i of incidents) lines.push(`${i.title ?? "Incident"} — ${i.status ?? "état inconnu"} — ${i.summary ?? "Aucun détail fourni"}.`);
+    const openIncidents = incidents.filter(i => (i.status ?? "").toLowerCase() === "open");
+    const resolvedIncidents = incidents.filter(i => (i.status ?? "").toLowerCase() === "resolved");
+    lines.push(`Incidents ouverts : ${openIncidents.length}. Incidents résolus retournés : ${resolvedIncidents.length}.`);
+    for (const i of openIncidents) lines.push(`${i.title ?? "Incident"} — ${i.severity ?? "gravité non précisée"} — ${i.summary ?? "Aucun détail fourni"}.`);
     for (const c of data.diagnostics?.checks ?? []) if ((c.count ?? 0) > 0) lines.push(`${c.component ?? "Contrôle"} / ${c.check_name ?? "vérification"} : ${c.count} élément(s). ${c.explanation ?? ""}`);
-    if (!incidents.length && !(data.diagnostics?.checks ?? []).some(c => (c.count ?? 0) > 0)) lines.push("Aucun incident ou élément en file d'attente n'est signalé dans les données reçues.");
+    if (!openIncidents.length && !(data.diagnostics?.checks ?? []).some(c => (c.count ?? 0) > 0)) lines.push("Aucun incident ouvert ni élément en file d'attente n'est signalé dans les données reçues.");
     return { title: "État des incidents et diagnostics", lines, limitation: "Les journaux Vercel, erreurs navigateur et alertes de tous les fournisseurs ne sont pas encore intégrés." };
   }
   if (/présence|pointage|qr|borne|retard|absence|synchron/.test(q)) {
@@ -44,7 +46,7 @@ function summarize(query: string, data: Result): { title: string; lines: string[
   if (/audit|historique|opération|action|qui a/.test(q)) {
     const events = data.recent_audit ?? [];
     lines.push(`Nombre total d'événements d'audit : ${data.audit_total ?? 0}.`);
-    for (const e of events) lines.push(`${e.action ?? "Action"} — ${e.outcome ?? "résultat inconnu"} — ${e.occurred_at ? new Date(e.occurred_at).toLocaleString("fr-FR") : "date non fournie"}.`);
+    for (const e of events) lines.push(`${e.action ?? "Action"} — auteur : ${e.actor_email ?? "non communiqué"} — cible : ${e.target_type ?? "non précisée"} ${e.target_ref ?? ""} — ${e.outcome ?? "résultat inconnu"} — ${e.environment ?? "environnement non précisé"} — ${e.occurred_at ? new Date(e.occurred_at).toLocaleString("fr-FR") : "date non fournie"}.`);
     return { title: "Journal d'audit", lines, limitation: "Seuls les événements renvoyés par l'API du centre sont affichés." };
   }
   return { title: "Demande non encore prise en charge", lines: ["Je n'ai pas encore de moteur IA connecté pour comprendre toutes les demandes libres.", "Pour l'instant, je peux exécuter quelques consultations réelles en lecture seule : bilan des projets, incidents, présences et journal d'audit."], limitation: "Aucune donnée métier d’Aéro Service n’a été modifiée. Les contrôles internes WDESK ont pu être actualisés." };
