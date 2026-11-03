@@ -20,6 +20,8 @@ jobs:
         run: npm install
       - name: Lint
         run: npm run lint
+        env:
+          ESLINT_USE_FLAT_CONFIG: false
       - name: Type check
         run: npx tsc --noEmit
       - name: Build
