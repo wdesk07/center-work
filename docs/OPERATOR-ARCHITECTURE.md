@@ -8,6 +8,7 @@ Permettre au propriétaire de piloter les projets en langage naturel, sans écri
 - Authentification : session Supabase existante, vérifiée côté serveur par /api/control.
 - Capacités actives dans cette première étape : consultations en lecture seule du registre projets, diagnostics agrégés, incidents et journal d'audit.
 - Les demandes reconnues sont routées vers les données réellement retournées par l'API. Les demandes inconnues sont explicitement déclarées non prises en charge.
+- L'API `/api/control` n'expose aucune écriture : POST répond 405. Toute future action devra disposer d'un handler dédié, d'une liste blanche d'opérations et d'un flux d'approbation propriétaire.
 - Aucun faux résultat, aucune mutation, aucune réparation automatique dans cette étape.
 
 ## Architecture cible
