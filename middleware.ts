@@ -56,4 +56,4 @@ export async function middleware(request: NextRequest) {
 
 // The API route performs its own session check and the Edge Function enforces
 // the owner allowlist. Excluding it here is required for first-time activation.
-export const config = { matcher: ["/"] };
+export const config = { matcher: ["/", "/operator/:path*"] };
