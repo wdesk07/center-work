@@ -274,7 +274,8 @@ export default function Home() {
     const registrationText = inventory?.registrations.filter((x: any) => x.person_id === p.id).map((x: any) => x.registration_number).join(" ") ?? "";
     const roleText = inventory?.user_roles.filter((x: any) => x.user_id === p.id).map((x: any) => inventory?.roles.find((r: any) => r.id === x.role_id)?.code ?? "").join(" ") ?? "";
     const authUser = inventory?.auth_users.find((x: any) => x.id === p.id);
-    return [p.display_name,p.first_name,p.last_name,p.email,p.public_id,linkedStudent?.student_number,linkedStaff?.staff_number,linkedTeacher?.teacher_number,registrationText,roleText,authUser?.phone].some(v => String(v ?? "").toLowerCase().includes(q));
+    const authStateText = authUser ? (authUser.banned_until && new Date(authUser.banned_until).getTime() > Date.now() ? "auth suspendu" : authUser.email_confirmed_at ? "auth confirmé" : "auth non confirmé") : "sans auth auth absent";
+    return [p.display_name,p.first_name,p.last_name,p.email,p.public_id,linkedStudent?.student_number,linkedStaff?.staff_number,linkedTeacher?.teacher_number,registrationText,roleText,authUser?.phone,authStateText].some(v => String(v ?? "").toLowerCase().includes(q));
   }).slice(0, 30);
 
   function choose(key: ModuleKey) {
@@ -528,7 +529,7 @@ export default function Home() {
               <div><span>E-mails confirmés / téléphones renseignés</span><b>{inventory ? `${inventory.auth_users.filter((u:any)=>Boolean(u.email_confirmed_at)).length} / ${inventory.auth_users.filter((u:any)=>Boolean(u.phone)).length}` : "—"}</b></div>
             </div>
             <div className="section-title"><div><h2>Recherche de comptes</h2><p>Nom, e-mail, matricule, numéro d’inscription ou rôle.</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger les comptes"} <RefreshCw size={15}/></button></div>
-            <div className="search-field"><Search size={17}/><input value={personSearch} onChange={e=>setPersonSearch(e.target.value)} placeholder="Rechercher un compte, un numéro ou un rôle…" disabled={!inventory}/></div>
+            <div className="search-field"><Search size={17}/><input value={personSearch} onChange={e=>setPersonSearch(e.target.value)} placeholder="Nom, e-mail, matricule, rôle ou « sans auth »…" disabled={!inventory}/></div>
             {personSearch.trim() && inventory && <div className="audit-list">{matchedProfiles.map((p:any)=>{
               const student=inventory.students.find((x:any)=>x.id===p.id);
               const staffMember=inventory.staff.find((x:any)=>x.id===p.id);
