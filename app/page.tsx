@@ -81,6 +81,10 @@ export default function Home() {
   const [qrDecision, setQrDecision] = useState<"approved" | "rejected">("approved");
   const [qrReason, setQrReason] = useState("");
   const [qrConfirmation, setQrConfirmation] = useState("");
+  const [justificationTarget, setJustificationTarget] = useState("");
+  const [justificationDecision, setJustificationDecision] = useState<"approved" | "rejected">("approved");
+  const [justificationReason, setJustificationReason] = useState("");
+  const [justificationConfirmation, setJustificationConfirmation] = useState("");
   const [kioskTarget, setKioskTarget] = useState("");
   const [kioskReason, setKioskReason] = useState("");
   const [kioskConfirmation, setKioskConfirmation] = useState("");
@@ -200,6 +204,37 @@ export default function Home() {
       await loadCommandInventory();
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la décision QR."); }
+    finally { setCommandBusy(false); }
+  }
+
+  async function submitAbsenceJustificationReview(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!justificationTarget || justificationReason.trim().length < 8 || justificationConfirmation !== "CONFIRMER") {
+      setNotice("Choisis une justification en attente, indique le motif et saisis CONFIRMER.");
+      return;
+    }
+    setCommandBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "absence_justification_review", target_id: justificationTarget,
+          decision: justificationDecision, reason: justificationReason.trim(),
+          confirmation: "CONFIRMER", request_id: crypto.randomUUID(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Décision de justification refusée");
+      setNotice(result.audit_warning
+        ? "Décision appliquée dans Aéro Service TEST, mais la mise à jour du journal WDESK a échoué. Ne répète pas l’action ; vérifie l’historique."
+        : justificationDecision === "approved"
+          ? "Justification approuvée. La présence liée est régularisée si une absence correspondante existe, et l’apprenant est notifié."
+          : "Justification refusée. Le commentaire est enregistré et l’apprenant est notifié.");
+      setJustificationTarget(""); setJustificationReason(""); setJustificationConfirmation("");
+      await loadCommandInventory(false);
+      await refresh();
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la revue de justification."); }
     finally { setCommandBusy(false); }
   }
 
@@ -345,6 +380,25 @@ export default function Home() {
                 <article className="stat-card"><div className="stat-top"><span>Justifications</span><ClipboardList size={18}/></div><strong>{inventory.justifications.length}</strong><small>Demandes chargées</small></article>
               </div>
               <div className="audit-list">{inventory.daily_attendance.slice(0,30).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{x.local_date} · {x.arrived_at ? new Date(x.arrived_at).toLocaleTimeString("fr-FR") : "Heure non enregistrée"} · {x.minutes_after_cutoff ?? 0} minute(s) après la limite</small></div><Status tone={["present","on_time","regularized"].includes(String(x.status).toLowerCase())?"good":String(x.status).toLowerCase().includes("late")||String(x.status).toLowerCase().includes("retard")?"warn":"muted"}>{x.status}</Status></div>)}</div>
+              <form className="module-panel" onSubmit={submitAbsenceJustificationReview}>
+                <h3>Traiter une justification d’absence</h3>
+                <p>La décision passe par la règle métier Aéro Service TEST. Une approbation régularise l’absence correspondante et envoie une notification. Motif et confirmation obligatoires.</p>
+                <label className="command-label">Justification en attente</label>
+                <select value={justificationTarget} onChange={e=>setJustificationTarget(e.target.value)} required>
+                  <option value="">Choisir une justification…</option>
+                  {inventory.justifications.filter((x:any)=>x.status==="pending").map((x:any)=><option key={x.id} value={x.id}>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id} · {x.reason_type ?? "Absence"} · {new Date(x.submitted_at).toLocaleDateString("fr-FR")}</option>)}
+                </select>
+                <label className="command-label">Décision</label>
+                <select value={justificationDecision} onChange={e=>setJustificationDecision(e.target.value as "approved"|"rejected")}>
+                  <option value="approved">Approuver et régulariser si possible</option>
+                  <option value="rejected">Refuser la justification</option>
+                </select>
+                <label className="command-label">Motif / commentaire obligatoire</label>
+                <textarea value={justificationReason} onChange={e=>setJustificationReason(e.target.value)} minLength={8} maxLength={500} required />
+                <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+                <input value={justificationConfirmation} onChange={e=>setJustificationConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+                <button className="primary-button" type="submit" disabled={commandBusy || !justificationTarget}>{commandBusy ? "Traitement…" : "Confirmer la décision"} <ShieldCheck size={16}/></button>
+              </form>
               <div className="section-title"><div><h2>Présences par séance</h2><p>Les statuts de séance sont conservés séparément des pointages journaliers.</p></div><span className="count-pill">{inventory.session_attendance.length}</span></div>
               <div className="audit-list">{inventory.session_attendance.slice(0,20).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{x.local_date} · {x.source ?? "Source non précisée"} · {x.arrived_at ? new Date(x.arrived_at).toLocaleTimeString("fr-FR") : "—"}</small></div><Status>{x.status}</Status></div>)}</div>
             </> : <div className="empty-state">Charge l’inventaire pour consulter les présences réelles.</div>}
