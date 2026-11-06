@@ -7,7 +7,7 @@ import {
   Search, Settings, ShieldCheck, Users, X, RefreshCw, ExternalLink, ClipboardList
 } from "lucide-react";
 
-type ModuleKey = "overview" | "diagnostics" | "projects" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
+type ModuleKey = "overview" | "diagnostics" | "projects" | "commands" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
 type Project = { id?: string; platform: string; project_name: string; environment: string; external_ref?: string | null; dashboard_url?: string | null; connection_status: string; notes?: string | null; updated_at?: string };
 type AuditEvent = { id: number; occurred_at: string; actor_email?: string; action: string; target_type?: string; target_ref?: string; environment: string; outcome: string; details?: Record<string, unknown> };
 type DiagnosticCheck = { component: string; check_name: string; count: number; status: string; explanation: string };
@@ -18,7 +18,7 @@ type Dashboard = { owner?: { email: string; display_name: string; role: string }
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
   { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
   { key: "diagnostics", label: "Diagnostics & incidents", icon: Activity, group: "ESPACE DE TRAVAIL" },
-  { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },
+  { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },\n  { key: "commands", label: "Commandes propriétaires", icon: LockKeyhole, group: "PILOTAGE" },
   { key: "supabase", label: "Supabase", icon: Database, group: "PILOTAGE" },
   { key: "hosting", label: "Hébergement Vercel", icon: Cloud, group: "PILOTAGE" },
   { key: "github", label: "Code & dépôts", icon: Github, group: "PILOTAGE" },
@@ -30,7 +30,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
   diagnostics: { title: "Diagnostics & incidents", intro: "Contrôles agrégés en direct sur les données TEST. Les limites de mesure sont affichées explicitement." },
-  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
+  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },\n  commands: { title: "Commandes propriétaires", intro: "Inventaire TEST et première action réversible, réservés au propriétaire vérifié." },
   supabase: { title: "Supabase", intro: "Accès à la console, inventaire des projets et état de la liaison du registre." },
   hosting: { title: "Hébergement Vercel", intro: "Accès à la console Vercel et au déploiement du centre. Les commandes API attendent une intégration sécurisée." },
   github: { title: "Code & dépôts", intro: "Accès aux dépôts WDESK et au code du centre. Les opérations d’écriture seront protégées et auditées." },
@@ -55,6 +55,13 @@ export default function Home() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [inventory, setInventory] = useState<{profiles: any[]; formations: any[]; groups: any[]} | null>(null);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [changeReason, setChangeReason] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [commandBusy, setCommandBusy] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -73,6 +80,46 @@ export default function Home() {
   }
 
   useEffect(() => { void refresh(); }, []);
+
+  async function loadCommandInventory() {
+    setInventoryLoading(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Lecture refusée");
+      setInventory(result.inventory);
+      setNotice("Inventaire du projet TEST chargé en lecture seule.");
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Impossible de charger l’inventaire."); }
+    finally { setInventoryLoading(false); }
+  }
+
+  async function submitProfileNameChange(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProfile || !newDisplayName.trim() || changeReason.trim().length < 8 || confirmation !== "CONFIRMER") {
+      setNotice("Complète le profil, le nouveau nom, le motif et saisis CONFIRMER.");
+      return;
+    }
+    setCommandBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "profile_display_name_update", target_id: selectedProfile,
+          display_name: newDisplayName.trim(), reason: changeReason.trim(),
+          confirmation: "CONFIRMER", request_id: crypto.randomUUID(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Modification refusée");
+      setNotice("Nom du profil modifié et opération inscrite au journal d’audit TEST.");
+      setNewDisplayName(""); setChangeReason(""); setConfirmation("");
+      await loadCommandInventory();
+      await refresh();
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la commande."); }
+    finally { setCommandBusy(false); }
+  }
 
   const projects = data?.projects ?? [];
   const audits = data?.recent_audit ?? [];
@@ -147,6 +194,27 @@ export default function Home() {
           </div>}
 
           {active === "projects" && <div className="panel project-panel"><div className="panel-heading"><div><h3>Inventaire des projets</h3><p>Données issues du registre sécurisé, sans projets fictifs ajoutés à l’écran.</p></div><span className="count-pill">{projects.length} éléments</span></div><div className="search-field"><Search size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un projet…"/></div><div className="project-list">{filteredProjects.map(p => <article className="project-row" key={p.id ?? p.project_name}><div className="project-symbol">{p.platform === "supabase" ? <Database/> : p.platform === "vercel" ? <Cloud/> : p.platform === "github" ? <Github/> : <Code2/>}</div><div className="project-info"><b>{p.project_name}</b><span>{p.platform} · {p.notes ?? p.external_ref ?? "Aucune note"}</span></div><div className="project-meta"><small>{p.environment}</small><Status tone={p.connection_status === "connected" ? "good" : p.connection_status === "degraded" ? "warn" : "muted"}>{p.connection_status}</Status></div>{p.dashboard_url && <ProviderLink href={p.dashboard_url}>Console</ProviderLink>}</article>)}{!loading && filteredProjects.length === 0 && <div className="empty-state"><b>Aucun projet correspondant</b><span>Le registre ne contient aucun résultat pour cette recherche.</span></div>}</div></div>}
+
+          {active === "commands" && <div className="panel project-panel">
+            <div className="panel-heading"><div><h3>Commandes propriétaires · TEST uniquement</h3><p>Les données sont lues depuis le projet TEST. Aucune connexion à Aéro Service PROD.</p></div><Status tone="warn">Fonction en préparation</Status></div>
+            <div className="notice"><ShieldCheck size={17}/>Cette première version autorise la consultation de profils/formations/groupes et une seule modification : le nom affiché d’un profil. Chaque changement exige un motif, une confirmation et un événement d’audit. Pas de suppression, pas de changement d’e-mail, pas de mot de passe.</div>
+            <div className="section-title"><div><h2>Inventaire</h2><p>{inventory ? `${inventory.profiles.length} profils · ${inventory.formations.length} formations · ${inventory.groups.length} groupes` : "Charge les données avant toute intervention."}</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger l’inventaire"} <RefreshCw size={15}/></button></div>
+            {inventory && <div className="stats-grid"><article className="stat-card"><div className="stat-top"><span>Profils</span><Users size={18}/></div><strong>{inventory.profiles.length}</strong><small>Liste limitée aux 250 premiers</small></article><article className="stat-card"><div className="stat-top"><span>Formations</span><Blocks size={18}/></div><strong>{inventory.formations.length}</strong><small>Catalogue TEST</small></article><article className="stat-card"><div className="stat-top"><span>Groupes</span><ClipboardList size={18}/></div><strong>{inventory.groups.length}</strong><small>Groupes TEST</small></article></div>}
+            <form className="module-panel" onSubmit={submitProfileNameChange}>
+              <h3>Modifier le nom affiché d’un profil</h3>
+              <p>Modification directe et journalisée. Sélectionne soigneusement le bon compte.</p>
+              <label className="command-label">Profil cible</label>
+              <select value={selectedProfile} onChange={e => { setSelectedProfile(e.target.value); const p=inventory?.profiles.find(x=>x.id===e.target.value); setNewDisplayName(p?.display_name ?? ""); }} disabled={!inventory}>
+                <option value="">Choisir un profil…</option>{(inventory?.profiles ?? []).map(p => <option key={p.id} value={p.id}>{p.display_name || "Sans nom"} · {p.email || p.public_id || p.id}</option>)}
+              </select>
+              <label className="command-label">Nouveau nom affiché</label><input value={newDisplayName} onChange={e=>setNewDisplayName(e.target.value)} maxLength={120} required />
+              <label className="command-label">Motif obligatoire (8 caractères minimum)</label><textarea value={changeReason} onChange={e=>setChangeReason(e.target.value)} minLength={8} maxLength={500} required />
+              <label className="command-label">Confirmation explicite : saisir CONFIRMER</label><input value={confirmation} onChange={e=>setConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+              <button className="primary-button" type="submit" disabled={commandBusy || !inventory}>{commandBusy ? "Traitement…" : "Confirmer la modification"} <ShieldCheck size={16}/></button>
+            </form>
+            {inventory && <div className="section-title"><div><h2>Catalogue des formations</h2><p>Lecture seule</p></div></div>}
+            {inventory?.formations.map(x=><div className="audit-row" key={x.id}><div><b>{x.name}</b><small>{x.code} · {x.duration ?? "Durée non précisée"}</small></div><Status>{x.status}</Status></div>)}
+          </div>}
 
           {active === "supabase" && <div className="module-layout"><div className="panel module-panel"><div className="module-icon"><Database/></div><h2>Supabase</h2><p>Le backend de contrôle est actuellement hébergé temporairement dans le projet Aéro Service TEST. Il ne faut pas le confondre avec Aéro Service PROD.</p><div className="security-list"><div><span>Aéro Service TEST · { "nuijzdqnhjzcnqpfqvvl" }</span><Status tone="good">Hôte temporaire</Status></div><div><span>Projet indépendant du centre</span><Status tone="warn">À créer / migrer</Status></div><div><span>Opérations SQL depuis le centre</span><Status>Pas encore activées</Status></div></div><ProviderLink href="https://supabase.com/dashboard/project/nuijzdqnhjzcnqpfqvvl">Ouvrir Supabase TEST</ProviderLink></div><aside className="panel checklist"><h3>Connexion réelle</h3><div><Status tone="good">Actif</Status><span>API sécurisée du centre</span></div><div><Status tone="good">Actif</Status><span>Registre isolé wdesk_control</span></div><div><Status tone="warn">À faire</Status><span>Inventaire de tous les projets via API</span></div><div><Status tone="warn">À faire</Status><span>Commandes SQL et sauvegardes auditées</span></div></aside></div>}
 
