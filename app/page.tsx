@@ -81,6 +81,9 @@ export default function Home() {
   const [qrDecision, setQrDecision] = useState<"approved" | "rejected">("approved");
   const [qrReason, setQrReason] = useState("");
   const [qrConfirmation, setQrConfirmation] = useState("");
+  const [kioskTarget, setKioskTarget] = useState("");
+  const [kioskReason, setKioskReason] = useState("");
+  const [kioskConfirmation, setKioskConfirmation] = useState("");
 
   async function refresh() {
     setLoading(true);
@@ -192,6 +195,32 @@ export default function Home() {
       await loadCommandInventory();
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la décision QR."); }
+    finally { setCommandBusy(false); }
+  }
+
+  async function submitKioskRevoke(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!kioskTarget || kioskReason.trim().length < 8 || kioskConfirmation !== "CONFIRMER") {
+      setNotice("Choisis une borne active, indique le motif et saisis CONFIRMER.");
+      return;
+    }
+    setCommandBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "kiosk_device_revoke", target_id: kioskTarget,
+          reason: kioskReason.trim(), confirmation: "CONFIRMER", request_id: crypto.randomUUID(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Révocation refusée");
+      setNotice("Borne révoquée dans Aéro Service TEST. Le terminal concerné ne peut plus utiliser son ancien jeton.");
+      setKioskTarget(""); setKioskReason(""); setKioskConfirmation("");
+      await loadCommandInventory();
+      await refresh();
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la révocation."); }
     finally { setCommandBusy(false); }
   }
 
@@ -318,6 +347,20 @@ export default function Home() {
                 <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
                 <input value={qrConfirmation} onChange={e=>setQrConfirmation(e.target.value)} placeholder="CONFIRMER" required />
                 <button className="primary-button" type="submit" disabled={commandBusy || !qrTarget}>{commandBusy ? "Traitement…" : "Confirmer la décision QR"} <ShieldCheck size={16}/></button>
+              </form>
+              <form className="module-panel" onSubmit={submitKioskRevoke}>
+                <h3>Révoquer une borne</h3>
+                <p>Action sensible : révoque immédiatement le jeton de la borne sélectionnée. La borne sera bloquée jusqu’à une nouvelle activation depuis Aéro Service. Motif et confirmation obligatoires.</p>
+                <label className="command-label">Borne active</label>
+                <select value={kioskTarget} onChange={e=>setKioskTarget(e.target.value)} required>
+                  <option value="">Choisir une borne…</option>
+                  {(inventory.kiosk_devices ?? []).filter((x:any)=>!x.revoked_at).map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.id}</option>)}
+                </select>
+                <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
+                <textarea value={kioskReason} onChange={e=>setKioskReason(e.target.value)} minLength={8} maxLength={500} required />
+                <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+                <input value={kioskConfirmation} onChange={e=>setKioskConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+                <button className="primary-button" type="submit" disabled={commandBusy || !kioskTarget}>{commandBusy ? "Révocation…" : "Confirmer la révocation"} <ShieldCheck size={16}/></button>
               </form>
               <div className="lower-grid">
                 <article className="panel"><div className="panel-heading"><div><h3>Pointages récents</h3><p>Statut et heure d’arrivée depuis la table journalière</p></div><span className="count-pill">{inventory.daily_attendance.length}</span></div>
