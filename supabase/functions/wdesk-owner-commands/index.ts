@@ -91,6 +91,7 @@ Deno.serve(async (req: Request) => {
     });
     if (error) {
       const message = error.message ?? "";
+      if (error.code === "23505") return json(409, { error: "request_already_processed" });
       const conflictErrors: Record<string, string> = {
         REQUEST_ALREADY_PROCESSED: "request_already_processed",
         STUDENT_RECORD_NOT_FOUND: "student_record_not_found",
@@ -135,6 +136,7 @@ Deno.serve(async (req: Request) => {
   });
   if (error) {
     const message = error.message ?? "";
+    if (error.code === "23505" || message.includes("REQUEST_ALREADY_PROCESSED")) return json(409, { error: "request_already_processed" });
     if (message.includes("OWNER_SELF_CHANGE_NOT_ALLOWED")) return json(400, { error: "owner_profile_self_change_not_allowed_here" });
     if (message.includes("PROFILE_NOT_FOUND")) return json(404, { error: "profile_not_found" });
     if (message.includes("REQUEST_ALREADY_PROCESSED")) return json(409, { error: "request_already_processed" });
