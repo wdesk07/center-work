@@ -84,6 +84,9 @@ export default function Home() {
   const [kioskTarget, setKioskTarget] = useState("");
   const [kioskReason, setKioskReason] = useState("");
   const [kioskConfirmation, setKioskConfirmation] = useState("");
+  const [paymentTarget, setPaymentTarget] = useState("");
+  const [paymentReason, setPaymentReason] = useState("");
+  const [paymentConfirmation, setPaymentConfirmation] = useState("");
 
   async function refresh() {
     setLoading(true);
@@ -225,6 +228,34 @@ export default function Home() {
       await loadCommandInventory();
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la révocation."); }
+    finally { setCommandBusy(false); }
+  }
+
+  async function submitPaymentValidation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!paymentTarget || paymentReason.trim().length < 8 || paymentConfirmation !== "CONFIRMER") {
+      setNotice("Choisis un paiement en attente, indique le motif et saisis CONFIRMER.");
+      return;
+    }
+    setCommandBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "payment_validate", target_id: paymentTarget,
+          reason: paymentReason.trim(), confirmation: "CONFIRMER", request_id: crypto.randomUUID(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Validation du paiement refusée");
+      setNotice(result.audit_warning
+        ? "Paiement validé dans Aéro Service TEST, mais la mise à jour du journal WDESK a échoué. Ne répète pas l’action ; vérifie l’historique."
+        : `Paiement validé. Reçu : ${result.after?.receipt_number ?? "à vérifier"}.${result.attendance_after?.status === "regularized" ? " La présence liée est régularisée." : ""}`);
+      setPaymentTarget(""); setPaymentReason(""); setPaymentConfirmation("");
+      await loadCommandInventory();
+      await refresh();
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la validation du paiement."); }
     finally { setCommandBusy(false); }
   }
 
@@ -393,6 +424,20 @@ export default function Home() {
                 <article className="panel"><div className="panel-heading"><div><h3>Pénalités et paiements</h3><p>Dernières opérations financières TEST</p></div><span className="count-pill">{inventory.penalties.length + inventory.payments.length}</span></div>
                   {inventory.penalties.slice(0,8).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>Pénalité · {x.penalty_type} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.description ?? "—"}</small></div><Status tone={x.status==="paid"?"good":x.status==="pending"?"warn":"muted"}>{x.status}</Status></div>)}
                   {inventory.payments.slice(0,8).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.payer_name ?? x.person_id}</b><small>Paiement · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.receipt_number ?? "Sans reçu"}</small></div><Status tone={x.status==="validated"?"good":"warn"}>{x.status}</Status></div>)}
+                  <form className="module-panel" onSubmit={submitPaymentValidation}>
+                    <h3>Valider un paiement en attente</h3>
+                    <p>Validation définitive : génère le reçu. Pour un paiement de pénalité, Aéro Service peut également solder la pénalité, régulariser le retard et notifier l’apprenant. Un paiement validé devient immuable.</p>
+                    <label className="command-label">Paiement en attente</label>
+                    <select value={paymentTarget} onChange={e=>setPaymentTarget(e.target.value)} required>
+                      <option value="">Choisir un paiement…</option>
+                      {(inventory.payments ?? []).filter((x:any)=>x.status==="pending").map((x:any)=><option key={x.id} value={x.id}>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.payer_name ?? x.person_id} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.id}</option>)}
+                    </select>
+                    <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
+                    <textarea value={paymentReason} onChange={e=>setPaymentReason(e.target.value)} minLength={8} maxLength={500} required />
+                    <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+                    <input value={paymentConfirmation} onChange={e=>setPaymentConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+                    <button className="primary-button" type="submit" disabled={commandBusy || !paymentTarget}>{commandBusy ? "Validation…" : "Confirmer la validation définitive"} <ShieldCheck size={16}/></button>
+                  </form>
                   {!inventory.penalties.length && !inventory.payments.length && <div className="empty-state">Aucune opération financière chargée.</div>}
                 </article>
               </div>
@@ -400,8 +445,8 @@ export default function Home() {
           </div>}
 
           {active === "commands" && <div className="panel project-panel">
-            <div className="panel-heading"><div><h3>Commandes propriétaires · TEST uniquement</h3><p>Les données sont lues depuis le projet TEST. Aucune connexion à Aéro Service PROD.</p></div><Status tone="good">4 interventions protégées actives en TEST</Status></div>
-            <div className="notice"><ShieldCheck size={17}/>Consultation des comptes, inscriptions, formations, groupes, présences, bornes, QR et finances. Quatre interventions protégées sont disponibles : modifier le nom affiché, réparer l’association formation/groupe, approuver ou rejeter une demande QR, révoquer une borne. Les deux corrections de profil sont transactionnelles ; les opérations QR et borne utilisent les règles métier Aéro Service. Motif, confirmation et journalisation sont requis. Les suppressions, changements d’e-mail et mots de passe restent protégés.</div>
+            <div className="panel-heading"><div><h3>Commandes propriétaires · TEST uniquement</h3><p>Les données sont lues depuis le projet TEST. Aucune connexion à Aéro Service PROD.</p></div><Status tone="good">5 interventions protégées actives en TEST</Status></div>
+            <div className="notice"><ShieldCheck size={17}/>Consultation des comptes, inscriptions, formations, groupes, présences, bornes, QR et finances. Cinq interventions protégées sont disponibles : modifier le nom affiché, réparer l’association formation/groupe, approuver ou rejeter une demande QR, révoquer une borne, valider un paiement en attente. Les deux corrections de profil sont transactionnelles ; les opérations QR, borne et paiement utilisent les règles métier Aéro Service. Motif, confirmation et journalisation sont requis. Les suppressions, changements d’e-mail et mots de passe restent protégés.</div>
             <div className="section-title"><div><h2>Inventaire</h2><p>{inventory ? `${inventory.profiles.length} profils · ${inventory.students.length} apprenants · ${inventory.staff.length} personnel · ${inventory.teachers.length} formateurs · ${inventory.registrations.length} inscriptions` : "Charge les données avant toute intervention."}</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger l’inventaire"} <RefreshCw size={15}/></button></div>
             {inventory && <div className="stats-grid"><article className="stat-card"><div className="stat-top"><span>Profils</span><Users size={18}/></div><strong>{inventory.profiles.length}</strong><small>Jusqu’à 500 profils chargés</small></article><article className="stat-card"><div className="stat-top"><span>Formations</span><Blocks size={18}/></div><strong>{inventory.formations.length}</strong><small>Catalogue TEST</small></article><article className="stat-card"><div className="stat-top"><span>Groupes</span><ClipboardList size={18}/></div><strong>{inventory.groups.length}</strong><small>Groupes TEST</small></article></div>}
             <div className="section-title"><div><h2>INTERVENTION DIRECTE · Recherche et diagnostic</h2><p>Recherche en lecture seule dans les comptes et inscriptions TEST. Aucun changement n'est appliqué depuis cette recherche.</p></div></div>
