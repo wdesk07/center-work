@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
         penalties: penalties.data, penalty_rules: penaltyRules.data, payments: payments.data
       },
       capabilities: {
-        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true,
+        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true,
         profile_display_name_update: true, student_assignment_repair: true, transactional_operations: true, arbitrary_sql: false, hard_delete: false
       },
     });
