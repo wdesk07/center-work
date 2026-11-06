@@ -381,6 +381,17 @@ export default function Home() {
                 <div><span>Règles de pénalité actives</span><b>{inventory.penalty_rules.filter((x:any)=>x.active).length}</b></div>
                 <div><span>Paiements avec reçu</span><b>{inventory.payments.filter((x:any)=>Boolean(x.receipt_number)).length}</b></div>
               </div>
+              <div className="lower-grid">
+                <article className="panel"><div className="panel-heading"><div><h3>Planning des cours</h3><p>Séances programmées et associations formation/groupe</p></div><span className="count-pill">{inventory.course_sessions.length}</span></div>
+                  {inventory.course_sessions.slice(0,15).map((x:any)=><div className="audit-row" key={x.id}><div><b>{x.subject || "Cours sans matière"}</b><small>{x.session_date} · {x.planned_start}–{x.planned_end} · {inventory.formations.find((f:any)=>f.id===x.formation_id)?.name ?? "Formation inconnue"} · {inventory.groups.find((g:any)=>g.id===x.group_id)?.name ?? "Sans groupe"}</small></div><Status>{x.status}</Status></div>)}
+                  {!inventory.course_sessions.length && <div className="empty-state">Aucune séance programmée.</div>}
+                </article>
+                <article className="panel"><div className="panel-heading"><div><h3>Pénalités et paiements</h3><p>Dernières opérations financières TEST</p></div><span className="count-pill">{inventory.penalties.length + inventory.payments.length}</span></div>
+                  {inventory.penalties.slice(0,8).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>Pénalité · {x.penalty_type} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.description ?? "—"}</small></div><Status tone={x.status==="paid"?"good":x.status==="pending"?"warn":"muted"}>{x.status}</Status></div>)}
+                  {inventory.payments.slice(0,8).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.payer_name ?? x.person_id}</b><small>Paiement · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.receipt_number ?? "Sans reçu"}</small></div><Status tone={x.status==="validated"?"good":"warn"}>{x.status}</Status></div>)}
+                  {!inventory.penalties.length && !inventory.payments.length && <div className="empty-state">Aucune opération financière chargée.</div>}
+                </article>
+              </div>
             </>}
           </div>}
 
