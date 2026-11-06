@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
         penalties: penalties.data, penalty_rules: penaltyRules.data, payments: payments.data
       },
       capabilities: {
-        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true,
+        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true, kiosk_device_revoke: true,
         profile_display_name_update: true, student_assignment_repair: true, transactional_operations: true, arbitrary_sql: false, hard_delete: false
       },
     });
@@ -96,6 +96,51 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
+  if (body.action === "kiosk_device_revoke") {
+    const deviceId = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(deviceId) || !requestId || requestId.length > 100 || reason.length < 8 || reason.length > 500)
+      return json(400, { error: "kiosk_device_reason_required" });
+    if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
+
+    const { data: before, error: beforeError } = await db.from("presence_kiosk_devices")
+      .select("id,name,activated_at,last_used_at,revoked_at").eq("id", deviceId).maybeSingle();
+    if (beforeError) return json(503, { error: "kiosk_device_lookup_failed" });
+    if (!before) return json(404, { error: "kiosk_device_not_found" });
+    if (before.revoked_at) return json(409, { error: "kiosk_device_already_revoked" });
+
+    const { data: auditStart, error: auditStartError } = await db.schema("wdesk_control").from("audit_events")
+      .insert({
+        actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
+        action: "kiosk.device_revoked", target_type: "presence_kiosk_device", target_ref: deviceId,
+        environment: "test", outcome: "pending", request_id: requestId,
+        details: { reason, before: { name: before.name, revoked_at: before.revoked_at }, stage: "revocation_started" },
+      }).select("id").single();
+    if (auditStartError || !auditStart) return json(503, { error: "audit_start_failed_operation_not_started" });
+
+    const { data: result, error: revokeError } = await userDb.rpc("revoke_presence_kiosk", { p_device_id: deviceId });
+    if (revokeError) {
+      await db.schema("wdesk_control").from("audit_events").update({
+        outcome: "failure",
+        details: { reason, before: { name: before.name, revoked_at: before.revoked_at }, failure_code: revokeError.code ?? "revoke_failed" },
+      }).eq("id", auditStart.id);
+      if ((revokeError.message ?? "").includes("KIOSK_ADMIN_REQUIRED")) return json(403, { error: "aero_director_role_required_for_kiosk_revoke" });
+      if ((revokeError.message ?? "").includes("KIOSK_NOT_FOUND_OR_ALREADY_REVOKED")) return json(409, { error: "kiosk_device_already_revoked" });
+      return json(409, { error: "kiosk_revocation_rejected_by_aero_service_rules" });
+    }
+
+    const { data: after } = await db.from("presence_kiosk_devices")
+      .select("id,name,activated_at,last_used_at,revoked_at").eq("id", deviceId).maybeSingle();
+    const { error: auditFinishError } = await db.schema("wdesk_control").from("audit_events").update({
+      outcome: "success",
+      details: { reason, before: { name: before.name, revoked_at: before.revoked_at }, after: after ?? { revoked: true }, result },
+    }).eq("id", auditStart.id);
+    if (auditFinishError) return json(200, { ok: true, action: "kiosk.device_revoked", result, audit_warning: "operation_completed_audit_update_failed" });
+    return json(200, { ok: true, action: "kiosk.device_revoked", result, before, after, request_id: requestId });
+  }
+
   if (body.action === "qr_checkin_review") {
     const requestTarget = typeof body.target_id === "string" ? body.target_id.trim() : "";
     const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
