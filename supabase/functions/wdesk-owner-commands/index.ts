@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
       profiles, formations, groups, students, staff, teachers, registrations,
       dailyAttendance, sessionAttendance, courseSessions, weeklySchedule,
       qrRequests, kioskDevices, offlineEvents, operatingDays, roles, userRoles,
-      justifications, penalties, penaltyRules, payments
+      justifications, penalties, penaltyRules, payments, authUsersResult
     ] = await Promise.all([
       db.from("profiles").select("id,display_name,email,status,public_id,first_name,last_name").order("display_name").limit(500),
       db.from("formations").select("id,code,name,duration,status").order("name").limit(100),
@@ -64,6 +64,7 @@ Deno.serve(async (req: Request) => {
       db.from("penalties").select("id,person_id,amount_fcfa,status,created_at,penalty_type,description,rule_id,daily_attendance_id").order("created_at", { ascending: false }).limit(500),
       db.from("penalty_rules").select("id,person_type,penalty_type,description,target_scope,application_mode,applies_after_time,min_delay_minutes,max_delay_minutes,tolerance_minutes,amount_fcfa,blocks_access,priority,active,effective_from,effective_until,formation_id").order("priority").limit(250),
       db.from("payments").select("id,penalty_id,person_id,amount_fcfa,method,provider,transaction_reference,status,received_at,received_by,validated_at,validated_by,refusal_reason,receipt_number,payment_type,payment_category,payer_name,payment_description").order("received_at", { ascending: false }).limit(500),
+      db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
     const readErrors = {
       profiles: profiles.error?.code, formations: formations.error?.code, groups: groups.error?.code,
@@ -73,7 +74,7 @@ Deno.serve(async (req: Request) => {
       weekly_schedule: weeklySchedule.error?.code, qr_requests: qrRequests.error?.code,
       kiosk_devices: kioskDevices.error?.code, offline_events: offlineEvents.error?.code,
       operating_days: operatingDays.error?.code, roles: roles.error?.code, user_roles: userRoles.error?.code, justifications: justifications.error?.code,
-      penalties: penalties.error?.code, penalty_rules: penaltyRules.error?.code, payments: payments.error?.code
+      penalties: penalties.error?.code, penalty_rules: penaltyRules.error?.code, payments: payments.error?.code, auth_users: authUsersResult.error?.message
     };
     if (Object.values(readErrors).some(Boolean))
       return json(503, { error: "extended_inventory_read_failed", details: readErrors });
@@ -87,7 +88,8 @@ Deno.serve(async (req: Request) => {
         course_sessions: courseSessions.data, weekly_schedule: weeklySchedule.data,
         qr_requests: qrRequests.data, kiosk_devices: kioskDevices.data, offline_events: offlineEvents.data,
         operating_days: operatingDays.data, roles: roles.data, user_roles: userRoles.data, justifications: justifications.data,
-        penalties: penalties.data, penalty_rules: penaltyRules.data, payments: payments.data
+        penalties: penalties.data, penalty_rules: penaltyRules.data, payments: payments.data,
+        auth_users: (authUsersResult.data?.users ?? []).map((u: any) => ({ id: u.id, email: u.email, phone: u.phone, email_confirmed_at: u.email_confirmed_at, phone_confirmed_at: u.phone_confirmed_at, last_sign_in_at: u.last_sign_in_at, banned_until: u.banned_until, created_at: u.created_at }))
       },
       capabilities: {
         inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true, kiosk_device_revoke: true, payment_validate: true,
