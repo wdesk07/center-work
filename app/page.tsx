@@ -188,9 +188,11 @@ export default function Home() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Décision QR refusée");
-      setNotice(qrDecision === "approved"
-        ? "Demande QR approuvée par les règles Aéro Service TEST. Vérifie le résultat et toute pénalité éventuelle."
-        : "Demande QR rejetée et motif enregistré dans l’historique TEST.");
+      setNotice(result.audit_warning
+        ? "Décision QR appliquée dans Aéro Service TEST, mais la mise à jour du journal WDESK a échoué. Ne répète pas l’action ; vérifie l’historique."
+        : qrDecision === "approved"
+          ? "Demande QR approuvée par les règles Aéro Service TEST. Vérifie le résultat et toute pénalité éventuelle."
+          : "Demande QR rejetée et motif enregistré dans l’historique TEST.");
       setQrTarget(""); setQrReason(""); setQrConfirmation("");
       await loadCommandInventory();
       await refresh();
@@ -216,7 +218,9 @@ export default function Home() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Révocation refusée");
-      setNotice("Borne révoquée dans Aéro Service TEST. Le terminal concerné ne peut plus utiliser son ancien jeton.");
+      setNotice(result.audit_warning
+        ? "Borne révoquée dans Aéro Service TEST, mais la mise à jour du journal WDESK a échoué. Ne répète pas l’action ; vérifie l’historique."
+        : "Borne révoquée dans Aéro Service TEST. Le terminal concerné ne peut plus utiliser son ancien jeton.");
       setKioskTarget(""); setKioskReason(""); setKioskConfirmation("");
       await loadCommandInventory();
       await refresh();
