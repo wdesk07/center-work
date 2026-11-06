@@ -60,7 +60,7 @@ Deno.serve(async (req: Request) => {
       },
       capabilities: {
         inventory_read: true, people_lookup: true, registration_lookup: true,
-        profile_display_name_update: true, arbitrary_sql: false, hard_delete: false
+        profile_display_name_update: true, student_assignment_repair: true, transactional_operations: true, arbitrary_sql: false, hard_delete: false
       },
     });
   }
