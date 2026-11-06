@@ -123,29 +123,22 @@ Deno.serve(async (req: Request) => {
     return json(400, { error: "request_id_target_name_and_reason_required" });
   if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
 
-  const { data: priorEvent } = await db.schema("wdesk_control").from("audit_events")
-    .select("id").eq("request_id", requestId).maybeSingle();
-  if (priorEvent) return json(409, { error: "request_already_processed" });
-
-  const { data: before, error: readError } = await db.from("profiles")
-    .select("id,display_name,email,status").eq("id", targetId).maybeSingle();
-  if (readError || !before) return json(404, { error: "profile_not_found" });
-  if (before.id === user.id) return json(400, { error: "owner_profile_self_change_not_allowed_here" });
-
-  const { data: after, error: updateError } = await db.from("profiles")
-    .update({ display_name: displayName }).eq("id", targetId)
-    .select("id,display_name,email,status").maybeSingle();
-  if (updateError || !after) return json(409, { error: "profile_update_failed" });
-
-  const { error: auditError } = await db.schema("wdesk_control").from("audit_events").insert({
-    actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
-    action: "profile.display_name_updated", target_type: "profile", target_ref: targetId,
-    environment: "test", outcome: "success", request_id: requestId,
-    details: { reason, before: { display_name: before.display_name }, after: { display_name: after.display_name } },
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(targetId)) return json(400, { error: "valid_profile_id_required" });
+  const { data, error } = await db.rpc("wdesk_update_profile_display_name", {
+    p_profile_id: targetId,
+    p_display_name: displayName,
+    p_reason: reason,
+    p_request_id: requestId,
+    p_actor_auth_user_id: user.id,
+    p_actor_email: user.email.toLowerCase(),
   });
-  if (auditError) {
-    await db.from("profiles").update({ display_name: before.display_name }).eq("id", targetId);
-    return json(503, { error: "audit_failed_change_rolled_back" });
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("OWNER_SELF_CHANGE_NOT_ALLOWED")) return json(400, { error: "owner_profile_self_change_not_allowed_here" });
+    if (message.includes("PROFILE_NOT_FOUND")) return json(404, { error: "profile_not_found" });
+    if (message.includes("REQUEST_ALREADY_PROCESSED")) return json(409, { error: "request_already_processed" });
+    return json(503, { error: "profile_update_failed" });
   }
-  return json(200, { ok: true, action: "profile.display_name_updated", before, after, request_id: requestId });
+  return json(200, { ...((data && typeof data === "object") ? data : {}), action: "profile.display_name_updated", request_id: requestId });
 });
