@@ -17,30 +17,30 @@ type Dashboard = { owner?: { email: string; display_name: string; role: string }
 
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
   { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
-  { key: "aero", label: "Aéro Service · Opérations", icon: ClipboardList, group: "AÉRO SERVICE" },
-  { key: "diagnostics", label: "Diagnostics & incidents", icon: Activity, group: "ESPACE DE TRAVAIL" },
-  { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },
-  { key: "commands", label: "Commandes propriétaires", icon: LockKeyhole, group: "PILOTAGE" },
-  { key: "supabase", label: "Supabase", icon: Database, group: "PILOTAGE" },
-  { key: "hosting", label: "Hébergement Vercel", icon: Cloud, group: "PILOTAGE" },
-  { key: "github", label: "Code & dépôts", icon: Github, group: "PILOTAGE" },
-  { key: "access", label: "Utilisateurs & accès", icon: Users, group: "SÉCURITÉ" },
-  { key: "audit", label: "Journal d’audit", icon: ShieldCheck, group: "SÉCURITÉ" },
-  { key: "settings", label: "Paramètres & connexions", icon: Settings, group: "SYSTÈME" },
+  { key: "aero", label: "Borne de présence", icon: ClipboardList, group: "AÉRO SERVICE" },
+  { key: "diagnostics", label: "Présences", icon: Activity, group: "AÉRO SERVICE" },
+  { key: "projects", label: "Formations et groupes", icon: Blocks, group: "AÉRO SERVICE" },
+  { key: "commands", label: "Personnel et Direction", icon: LockKeyhole, group: "AÉRO SERVICE" },
+  { key: "supabase", label: "Finances et pénalités", icon: Database, group: "AÉRO SERVICE" },
+  { key: "hosting", label: "QR et synchronisation", icon: Cloud, group: "AÉRO SERVICE" },
+  { key: "github", label: "Maintenance", icon: Github, group: "SYSTÈME" },
+  { key: "access", label: "Utilisateurs", icon: Users, group: "AÉRO SERVICE" },
+  { key: "audit", label: "Sécurité et historique", icon: ShieldCheck, group: "SYSTÈME" },
+  { key: "settings", label: "Paramètres généraux", icon: Settings, group: "SYSTÈME" },
 ];
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
-  aero: { title: "Aéro Service · Opérations", intro: "Inventaire opérationnel réel du projet Aéro Service TEST : présence, borne, QR, cours et finances, avec quelques interventions protégées." },
-  diagnostics: { title: "Diagnostics & incidents", intro: "Contrôles agrégés en direct sur les données TEST. Les limites de mesure sont affichées explicitement." },
-  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
-  commands: { title: "Commandes propriétaires", intro: "Inventaire TEST et première action réversible, réservés au propriétaire vérifié." },
-  supabase: { title: "Supabase", intro: "Accès à la console, inventaire des projets et état de la liaison du registre." },
-  hosting: { title: "Hébergement Vercel", intro: "Accès à la console Vercel et au déploiement du centre. Les commandes API attendent une intégration sécurisée." },
-  github: { title: "Code & dépôts", intro: "Accès aux dépôts WDESK et au code du centre. Les opérations d’écriture seront protégées et auditées." },
-  access: { title: "Utilisateurs & accès", intro: "Recherche réelle des comptes Aéro Service TEST, des fiches métier, des inscriptions et des rôles attribués." },
-  audit: { title: "Journal d’audit", intro: "Événements réellement enregistrés par l’API du centre." },
-  settings: { title: "Paramètres & connexions", intro: "État des intégrations et des prérequis de sécurité." },
+  aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes de contrôle QR depuis Aéro Service TEST." },
+  diagnostics: { title: "Présences", intro: "Suivi des pointages journaliers et par séance, retards, régularisations, justifications et anomalies de synchronisation." },
+  projects: { title: "Formations et groupes", intro: "Catalogue des formations, groupes, inscriptions et associations apprenants depuis la base TEST." },
+  commands: { title: "Personnel et Direction", intro: "Dossiers des collaborateurs, rôles et interventions propriétaires contrôlées dans l’environnement TEST." },
+  supabase: { title: "Finances et pénalités", intro: "Consultation des pénalités, règles, paiements, reçus et soldes à partir des enregistrements TEST." },
+  hosting: { title: "QR et synchronisation", intro: "Demandes QR, décisions, événements hors ligne et état de synchronisation des présences." },
+  github: { title: "Maintenance", intro: "État des composants, incidents, dépendances techniques et accès aux consoles de diagnostic." },
+  access: { title: "Utilisateurs", intro: "Recherche centralisée des comptes Auth, profils, apprenants, collaborateurs, inscriptions et rôles." },
+  audit: { title: "Sécurité et historique", intro: "Événements d’audit, décisions, acteurs, motifs et résultats des interventions." },
+  settings: { title: "Paramètres généraux", intro: "Connexions, périmètres TEST/PROD, autorisations et réglages de sécurité du centre." },
 };
 
 function Status({ children, tone = "muted" }: { children: React.ReactNode; tone?: string }) {
@@ -280,6 +280,7 @@ export default function Home() {
 
   function choose(key: ModuleKey) {
     setActive(key); setMobileOpen(false); setNotice("");
+    if (key !== "overview" && !inventory) void loadCommandInventory(false);
   }
 
   const platformCounts = {
@@ -463,8 +464,19 @@ export default function Home() {
               const authUser = inventory.auth_users.find((x: any) => x.id === p.id);
               const formation = inventory.formations.find((x: any) => x.id === (student?.formation_id ?? regs[0]?.formation_id));
               const group = inventory.groups.find((x: any) => x.id === (student?.group_id ?? regs[0]?.group_id));
+              const personDaily = inventory.daily_attendance.filter((x: any) => x.person_id === p.id);
+              const personSessions = inventory.session_attendance.filter((x: any) => x.person_id === p.id);
+              const personPenalties = inventory.penalties.filter((x: any) => x.person_id === p.id);
+              const personPayments = inventory.payments.filter((x: any) => x.person_id === p.id);
+              const personQr = inventory.qr_requests.filter((x: any) => x.person_id === p.id);
+              const openPenalties = personPenalties.filter((x: any) => !["paid","cancelled","waived","closed"].includes(String(x.status).toLowerCase()));
+              const pendingPayments = personPayments.filter((x: any) => ["pending","submitted","received"].includes(String(x.status).toLowerCase()) && !x.validated_at);
               const kind = student ? "Apprenant" : teacher || roles.some((r:any)=>["TEACHER","ENSEIGNANT"].includes(String(r).toUpperCase())) ? "Formateur" : staffMember || roles.some((r:any)=>["STAFF","PERSONNEL"].includes(String(r).toUpperCase())) ? "Personnel" : roles.some((r:any)=>["DIRECTOR","ADMIN","PRE_ADMIN"].includes(String(r).toUpperCase())) ? "Direction" : roles.some((r:any)=>["SECRETARIAT","SECRETARY","SECRETAIRE","SECRÉTAIRE"].includes(String(r).toUpperCase())) ? "Secrétariat" : "Profil sans fiche métier liée";
               return <div className="audit-row" key={p.id}><div><b>{p.display_name || [p.first_name,p.last_name].filter(Boolean).join(" ") || "Sans nom"} · {kind}</b><small>{p.email || "Sans e-mail"} · {p.public_id || student?.student_number || staffMember?.staff_number || teacher?.teacher_number || p.id}</small><small>Formation : {formation?.name ?? "Non associée"} · Groupe : {group?.name ?? "Non associé"}</small><small>Inscriptions : {regs.length ? regs.map((x: any) => `${x.registration_number} (${x.status})`).join(" · ") : "Aucune inscription retrouvée"}</small>
+                <small>Présences : {personDaily.length} journalières · {personSessions.length} par séance · derniers statuts : {[...personDaily].slice(0,3).map((x: any) => `${x.local_date} ${x.status}`).join(" / ") || "Aucun pointage"}</small>
+                <small>Pénalités : {personPenalties.length} au total · {openPenalties.length} ouvertes · {openPenalties.reduce((sum: number, x: any) => sum + Number(x.amount_fcfa || 0), 0).toLocaleString("fr-FR")} FCFA restant sur les pénalités ouvertes</small>
+                <small>Paiements : {personPayments.length} opérations · {pendingPayments.length} en attente · reçus : {personPayments.filter((x: any) => Boolean(x.receipt_number)).length}</small>
+                <small>Demandes QR : {personQr.length} · {personQr.filter((x: any) => ["pending","submitted","requested","pending_confirmation"].includes(String(x.status).toLowerCase())).length} en attente</small>
                 <small>Rôles : {roles.length ? roles.join(" · ") : "Aucun rôle attribué"}</small>
                 <small>Compte Auth : {authUser ? (authUser.banned_until && new Date(authUser.banned_until).getTime() > Date.now() ? "Suspendu" : authUser.email_confirmed_at ? "Confirmé" : "E-mail non confirmé") : "Absent"} · Téléphone : {authUser?.phone || "Non renseigné"} · Dernière connexion : {authUser?.last_sign_in_at ? new Date(authUser.last_sign_in_at).toLocaleString("fr-FR") : "Jamais / inconnue"}</small></div><Status tone={p.status === "active" ? "good" : "warn"}>{p.status}</Status></div>;
             })}{matchedProfiles.length === 0 && <div className="empty-state"><b>Aucun compte correspondant</b><span>La recherche porte sur les profils et identifiants actuellement chargés en TEST.</span></div>}</div>}
