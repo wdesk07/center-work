@@ -57,7 +57,8 @@ export default function Home() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [inventory, setInventory] = useState<{profiles: any[]; formations: any[]; groups: any[]} | null>(null);
+  const [inventory, setInventory] = useState<{profiles: any[]; formations: any[]; groups: any[]; students: any[]; staff: any[]; teachers: any[]; registrations: any[]} | null>(null);
+  const [personSearch, setPersonSearch] = useState("");
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
@@ -129,6 +130,15 @@ export default function Home() {
   const incidents = data?.incidents ?? [];
   const filteredProjects = useMemo(() => projects.filter(p => (p.project_name + p.platform + p.environment + (p.notes ?? "")).toLowerCase().includes(query.toLowerCase())), [projects, query]);
   const current = descriptions[active];
+  const matchedProfiles = (inventory?.profiles ?? []).filter((p: any) => {
+    const q = personSearch.trim().toLowerCase();
+    if (!q) return false;
+    const linkedStudent = inventory?.students.find((x: any) => x.id === p.id);
+    const linkedStaff = inventory?.staff.find((x: any) => x.id === p.id);
+    const linkedTeacher = inventory?.teachers.find((x: any) => x.id === p.id);
+    const registrationText = inventory?.registrations.filter((x: any) => x.person_id === p.id).map((x: any) => x.registration_number).join(" ") ?? "";
+    return [p.display_name,p.first_name,p.last_name,p.email,p.public_id,linkedStudent?.student_number,linkedStaff?.staff_number,linkedTeacher?.teacher_number,registrationText].some(v => String(v ?? "").toLowerCase().includes(q));
+  }).slice(0, 30);
 
   function choose(key: ModuleKey) {
     setActive(key); setMobileOpen(false); setNotice("");
@@ -200,8 +210,20 @@ export default function Home() {
           {active === "commands" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Commandes propriétaires · TEST uniquement</h3><p>Les données sont lues depuis le projet TEST. Aucune connexion à Aéro Service PROD.</p></div><Status tone="warn">Fonction en préparation</Status></div>
             <div className="notice"><ShieldCheck size={17}/>Cette première version autorise la consultation de profils/formations/groupes et une seule modification : le nom affiché d’un profil. Chaque changement exige un motif, une confirmation et un événement d’audit. Pas de suppression, pas de changement d’e-mail, pas de mot de passe.</div>
-            <div className="section-title"><div><h2>Inventaire</h2><p>{inventory ? `${inventory.profiles.length} profils · ${inventory.formations.length} formations · ${inventory.groups.length} groupes` : "Charge les données avant toute intervention."}</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger l’inventaire"} <RefreshCw size={15}/></button></div>
+            <div className="section-title"><div><h2>Inventaire</h2><p>{inventory ? `${inventory.profiles.length} profils · ${inventory.students.length} apprenants · ${inventory.staff.length} personnel · ${inventory.teachers.length} formateurs · ${inventory.registrations.length} inscriptions` : "Charge les données avant toute intervention."}</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger l’inventaire"} <RefreshCw size={15}/></button></div>
             {inventory && <div className="stats-grid"><article className="stat-card"><div className="stat-top"><span>Profils</span><Users size={18}/></div><strong>{inventory.profiles.length}</strong><small>Liste limitée aux 250 premiers</small></article><article className="stat-card"><div className="stat-top"><span>Formations</span><Blocks size={18}/></div><strong>{inventory.formations.length}</strong><small>Catalogue TEST</small></article><article className="stat-card"><div className="stat-top"><span>Groupes</span><ClipboardList size={18}/></div><strong>{inventory.groups.length}</strong><small>Groupes TEST</small></article></div>}
+            <div className="section-title"><div><h2>INTERVENTION DIRECTE · Recherche et diagnostic</h2><p>Recherche en lecture seule dans les comptes et inscriptions TEST. Aucun changement n'est appliqué depuis cette recherche.</p></div></div>
+            <div className="search-field"><Search size={17}/><input value={personSearch} onChange={e => setPersonSearch(e.target.value)} placeholder="Nom, e-mail, numéro apprenant, matricule ou inscription…" disabled={!inventory}/></div>
+            {personSearch.trim() && inventory && <div className="audit-list">{matchedProfiles.map((p: any) => {
+              const student = inventory.students.find((x: any) => x.id === p.id);
+              const staffMember = inventory.staff.find((x: any) => x.id === p.id);
+              const teacher = inventory.teachers.find((x: any) => x.id === p.id);
+              const regs = inventory.registrations.filter((x: any) => x.person_id === p.id);
+              const formation = inventory.formations.find((x: any) => x.id === (student?.formation_id ?? regs[0]?.formation_id));
+              const group = inventory.groups.find((x: any) => x.id === (student?.group_id ?? regs[0]?.group_id));
+              const kind = student ? "Apprenant" : staffMember ? "Personnel" : teacher ? "Formateur" : "Profil sans fiche métier liée";
+              return <div className="audit-row" key={p.id}><div><b>{p.display_name || [p.first_name,p.last_name].filter(Boolean).join(" ") || "Sans nom"} · {kind}</b><small>{p.email || "Sans e-mail"} · {p.public_id || student?.student_number || staffMember?.staff_number || teacher?.teacher_number || p.id}</small><small>Formation : {formation?.name ?? "Non associée"} · Groupe : {group?.name ?? "Non associé"}</small><small>Inscriptions : {regs.length ? regs.map((x: any) => `${x.registration_number} (${x.status})`).join(" · ") : "Aucune inscription retrouvée"}</small></div><Status tone={p.status === "active" ? "good" : "warn"}>{p.status}</Status></div>;
+            })}{matchedProfiles.length === 0 && <div className="empty-state"><b>Aucun compte correspondant</b><span>La recherche porte sur les profils et identifiants actuellement chargés en TEST.</span></div>}</div>}
             <form className="module-panel" onSubmit={submitProfileNameChange}>
               <h3>Modifier le nom affiché d’un profil</h3>
               <p>Modification directe et journalisée. Sélectionne soigneusement le bon compte.</p>
