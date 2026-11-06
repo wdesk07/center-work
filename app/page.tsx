@@ -106,16 +106,16 @@ export default function Home() {
 
   useEffect(() => { void refresh(); }, []);
 
-  async function loadCommandInventory() {
+  async function loadCommandInventory(showNotice = true) {
     setInventoryLoading(true);
-    setNotice("");
+    if (showNotice) setNotice("");
     try {
       const response = await fetch("/api/commands", { cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Lecture refusée");
       setInventory(result.inventory);
-      setNotice("Inventaire du projet TEST chargé en lecture seule.");
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Impossible de charger l’inventaire."); }
+      if (showNotice) setNotice("Inventaire du projet TEST chargé en lecture seule.");
+    } catch (e) { if (showNotice) setNotice(e instanceof Error ? e.message : "Impossible de charger l’inventaire."); }
     finally { setInventoryLoading(false); }
   }
 
@@ -140,7 +140,7 @@ export default function Home() {
       if (!response.ok) throw new Error(result.error ?? "Modification refusée");
       setNotice("Nom du profil modifié et opération inscrite au journal d’audit TEST.");
       setNewDisplayName(""); setChangeReason(""); setConfirmation("");
-      await loadCommandInventory();
+      await loadCommandInventory(false);
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la commande."); }
     finally { setCommandBusy(false); }
