@@ -85,6 +85,10 @@ export default function Home() {
   const [justificationDecision, setJustificationDecision] = useState<"approved" | "rejected">("approved");
   const [justificationReason, setJustificationReason] = useState("");
   const [justificationConfirmation, setJustificationConfirmation] = useState("");
+  const [registrationTarget, setRegistrationTarget] = useState("");
+  const [registrationDecision, setRegistrationDecision] = useState<"approved" | "rejected">("approved");
+  const [registrationReason, setRegistrationReason] = useState("");
+  const [registrationConfirmation, setRegistrationConfirmation] = useState("");
   const [kioskTarget, setKioskTarget] = useState("");
   const [kioskReason, setKioskReason] = useState("");
   const [kioskConfirmation, setKioskConfirmation] = useState("");
@@ -204,6 +208,37 @@ export default function Home() {
       await loadCommandInventory();
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la décision QR."); }
+    finally { setCommandBusy(false); }
+  }
+
+  async function submitRegistrationReview(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!registrationTarget || registrationReason.trim().length < 8 || registrationConfirmation !== "CONFIRMER") {
+      setNotice("Choisis une inscription en attente, indique le motif et saisis CONFIRMER.");
+      return;
+    }
+    setCommandBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "registration_review", target_id: registrationTarget,
+          decision: registrationDecision, reason: registrationReason.trim(),
+          confirmation: "CONFIRMER", request_id: crypto.randomUUID(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Décision d’inscription refusée");
+      setNotice(result.audit_warning
+        ? "Décision d’inscription appliquée dans Aéro Service TEST, mais la mise à jour du journal WDESK a échoué. Ne répète pas l’action ; vérifie l’historique."
+        : registrationDecision === "approved"
+          ? "Inscription approuvée. Le profil est activé et la fiche apprenant est créée ou complétée selon les règles Aéro Service."
+          : "Inscription refusée. Le motif est enregistré dans Aéro Service TEST.");
+      setRegistrationTarget(""); setRegistrationReason(""); setRegistrationConfirmation("");
+      await loadCommandInventory(false);
+      await refresh();
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la revue d’inscription."); }
     finally { setCommandBusy(false); }
   }
 
@@ -552,8 +587,8 @@ export default function Home() {
           </div>}
 
           {active === "commands" && <div className="panel project-panel">
-            <div className="panel-heading"><div><h3>Commandes propriétaires · TEST uniquement</h3><p>Les données sont lues depuis le projet TEST. Aucune connexion à Aéro Service PROD.</p></div><Status tone="good">6 interventions protégées actives en TEST</Status></div>
-            <div className="notice"><ShieldCheck size={17}/>Consultation des comptes, inscriptions, formations, groupes, présences, bornes, QR et finances. Six interventions protégées sont disponibles : modifier le nom affiché, réparer l’association formation/groupe, approuver ou rejeter une demande QR, traiter une justification d’absence, révoquer une borne, valider un paiement en attente. Les deux corrections de profil sont transactionnelles ; les opérations QR, borne et paiement utilisent les règles métier Aéro Service. Motif, confirmation et journalisation sont requis. Les suppressions, changements d’e-mail et mots de passe restent protégés.</div>
+            <div className="panel-heading"><div><h3>Commandes propriétaires · TEST uniquement</h3><p>Les données sont lues depuis le projet TEST. Aucune connexion à Aéro Service PROD.</p></div><Status tone="good">7 interventions protégées actives en TEST</Status></div>
+            <div className="notice"><ShieldCheck size={17}/>Consultation des comptes, inscriptions, formations, groupes, présences, bornes, QR et finances. Sept interventions protégées sont disponibles : modifier le nom affiché, réparer l’association formation/groupe, approuver ou rejeter une demande QR, traiter une justification d’absence, examiner une inscription et activer un apprenant, révoquer une borne, valider un paiement en attente. Les deux corrections de profil sont transactionnelles ; les opérations QR, borne et paiement utilisent les règles métier Aéro Service. Motif, confirmation et journalisation sont requis. Les suppressions, changements d’e-mail et mots de passe restent protégés.</div>
             <div className="section-title"><div><h2>Inventaire</h2><p>{inventory ? `${inventory.profiles.length} profils · ${inventory.students.length} apprenants · ${inventory.staff.length} personnel · ${inventory.teachers.length} formateurs · ${inventory.registrations.length} inscriptions` : "Charge les données avant toute intervention."}</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger l’inventaire"} <RefreshCw size={15}/></button></div>
             {inventory && <div className="stats-grid"><article className="stat-card"><div className="stat-top"><span>Profils</span><Users size={18}/></div><strong>{inventory.profiles.length}</strong><small>Jusqu’à 500 profils chargés</small></article><article className="stat-card"><div className="stat-top"><span>Formations</span><Blocks size={18}/></div><strong>{inventory.formations.length}</strong><small>Catalogue TEST</small></article><article className="stat-card"><div className="stat-top"><span>Groupes</span><ClipboardList size={18}/></div><strong>{inventory.groups.length}</strong><small>Groupes TEST</small></article></div>}
             <div className="section-title"><div><h2>INTERVENTION DIRECTE · Recherche et diagnostic</h2><p>Recherche en lecture seule dans les comptes et inscriptions TEST. Aucun changement n'est appliqué depuis cette recherche.</p></div></div>
@@ -628,6 +663,25 @@ export default function Home() {
 
           {active === "access" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Utilisateurs et accès · Aéro Service TEST</h3><p>Comptes, profils métier, inscriptions et rôles réels. Les modifications d’accès restent protégées tant que leurs workflows ne sont pas validés.</p></div><Status tone="good">Lecture réelle</Status></div>
+            <form className="module-panel" onSubmit={submitRegistrationReview}>
+              <h3>Examiner une inscription et activer un apprenant</h3>
+              <p>L’approbation utilise la fonction métier Aéro Service : elle valide l’inscription, active le profil, attribue le rôle apprenant et prépare sa fiche. Le refus conserve le commentaire. Les deux décisions exigent un motif et une confirmation.</p>
+              <label className="command-label">Inscription en attente</label>
+              <select value={registrationTarget} onChange={e=>setRegistrationTarget(e.target.value)} required>
+                <option value="">Choisir une inscription…</option>
+                {(inventory?.registrations ?? []).filter((x:any)=>x.status==="pending").map((x:any)=><option key={x.id} value={x.id}>{x.registration_number ?? x.id} · {inventory?.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id} · {inventory?.formations.find((f:any)=>f.id===x.formation_id)?.name ?? "Formation inconnue"}</option>)}
+              </select>
+              <label className="command-label">Décision</label>
+              <select value={registrationDecision} onChange={e=>setRegistrationDecision(e.target.value as "approved"|"rejected")}>
+                <option value="approved">Approuver et activer</option>
+                <option value="rejected">Refuser l’inscription</option>
+              </select>
+              <label className="command-label">Motif / commentaire obligatoire</label>
+              <textarea value={registrationReason} onChange={e=>setRegistrationReason(e.target.value)} minLength={8} maxLength={500} required />
+              <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+              <input value={registrationConfirmation} onChange={e=>setRegistrationConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+              <button className="primary-button" type="submit" disabled={commandBusy || !registrationTarget}>{commandBusy ? "Traitement…" : "Confirmer la décision d’inscription"} <ShieldCheck size={16}/></button>
+            </form>
             <div className="security-list">
               <div><span>Propriétaire WDESK</span><b>{data?.owner?.email ?? "Non retourné"}</b></div>
               <div><span>Rôle propriétaire WDESK</span><b>{data?.owner?.role ?? "Non retourné"}</b></div>
