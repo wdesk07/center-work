@@ -29,6 +29,7 @@ Deno.serve(async (req: Request) => {
   if (authError || !user?.email || !user.email_confirmed_at) return json(401, { error: "verified_account_required" });
 
   const db = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
+  const userDb = createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
   const { data: owner, error: ownerError } = await db.schema("wdesk_control").from("owner_accounts")
     .select("id,email,display_name,owner_role,identity_status")
     .eq("auth_user_id", user.id).eq("identity_status", "verified").maybeSingle();
@@ -95,6 +96,59 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
+  if (body.action === "qr_checkin_review") {
+    const requestTarget = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const decision = body.decision === "approved" || body.decision === "rejected" ? body.decision : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(requestTarget) || !requestId || requestId.length > 100 || !decision || reason.length < 8 || reason.length > 500)
+      return json(400, { error: "qr_request_decision_reason_required" });
+    if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
+
+    const { data: before, error: beforeError } = await db.from("qr_checkin_requests")
+      .select("id,person_id,session_id,requested_at,status,rejection_reason,daily_attendance_id,penalty_id")
+      .eq("id", requestTarget).maybeSingle();
+    if (beforeError) return json(503, { error: "qr_request_lookup_failed" });
+    if (!before) return json(404, { error: "qr_request_not_found" });
+    if (before.status !== "pending_confirmation") return json(409, { error: "qr_request_not_pending_confirmation" });
+
+    const { data: auditStart, error: auditStartError } = await db.schema("wdesk_control").from("audit_events")
+      .insert({
+        actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
+        action: "qr.request_reviewed", target_type: "qr_checkin_request", target_ref: requestTarget,
+        environment: "test", outcome: "pending", request_id: requestId,
+        details: { reason, decision, before: { status: before.status }, stage: "review_started" },
+      }).select("id").single();
+    if (auditStartError || !auditStart) return json(503, { error: "audit_start_failed_operation_not_started" });
+
+    const { data: result, error: reviewError } = await userDb.rpc("review_qr_checkin_request", {
+      p_request_id: requestTarget, p_decision: decision, p_comment: reason,
+    });
+    if (reviewError) {
+      await db.schema("wdesk_control").from("audit_events").update({
+        outcome: "failure",
+        details: { reason, decision, before: { status: before.status }, failure_code: reviewError.code ?? "review_failed" },
+      }).eq("id", auditStart.id);
+      const message = reviewError.message ?? "";
+      if (message.includes("QR_CHECKIN_REQUEST_NOT_PENDING")) return json(409, { error: "qr_request_not_pending_confirmation" });
+      if (message.includes("ATTENDANCE_ALREADY_RECORDED")) return json(409, { error: "attendance_already_recorded" });
+      if (message.includes("NO_TRAINING_SESSION_SCHEDULED_TODAY")) return json(409, { error: "no_training_session_scheduled" });
+      if (message.includes("QR_CHECKIN_REVIEW_FORBIDDEN")) return json(403, { error: "aero_role_required_for_qr_review" });
+      return json(409, { error: "qr_review_rejected_by_aero_service_rules" });
+    }
+
+    const { data: after } = await db.from("qr_checkin_requests")
+      .select("id,status,rejection_reason,reviewed_by,reviewed_at,daily_attendance_id,penalty_id")
+      .eq("id", requestTarget).maybeSingle();
+    const { error: auditFinishError } = await db.schema("wdesk_control").from("audit_events").update({
+      outcome: "success",
+      details: { reason, decision, before: { status: before.status }, after: after ?? { status: decision }, result },
+    }).eq("id", auditStart.id);
+    if (auditFinishError) return json(200, { ok: true, action: "qr.request_reviewed", result, audit_warning: "operation_completed_audit_update_failed" });
+    return json(200, { ok: true, action: "qr.request_reviewed", result, before, after, request_id: requestId });
+  }
+
   if (body.action === "student_assignment_repair") {
     const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
     const targetId = typeof body.target_id === "string" ? body.target_id.trim() : "";
