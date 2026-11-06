@@ -523,6 +523,9 @@ export default function Home() {
               <div><span>Rôle propriétaire WDESK</span><b>{data?.owner?.role ?? "Non retourné"}</b></div>
               <div><span>Profils chargés</span><b>{inventory ? inventory.profiles.length : "—"}</b></div>
               <div><span>Apprenants / Personnel / Formateurs</span><b>{inventory ? `${inventory.students.length} / ${inventory.staff.length} / ${inventory.teachers.length}` : "—"}</b></div>
+              <div><span>Profils sans compte Auth</span><b>{inventory ? inventory.profiles.filter((p:any)=>!inventory.auth_users.some((u:any)=>u.id===p.id)).length : "—"}</b></div>
+              <div><span>Comptes Auth sans profil</span><b>{inventory ? inventory.auth_users.filter((u:any)=>!inventory.profiles.some((p:any)=>p.id===u.id)).length : "—"}</b></div>
+              <div><span>E-mails confirmés / téléphones renseignés</span><b>{inventory ? `${inventory.auth_users.filter((u:any)=>Boolean(u.email_confirmed_at)).length} / ${inventory.auth_users.filter((u:any)=>Boolean(u.phone)).length}` : "—"}</b></div>
             </div>
             <div className="section-title"><div><h2>Recherche de comptes</h2><p>Nom, e-mail, matricule, numéro d’inscription ou rôle.</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger les comptes"} <RefreshCw size={15}/></button></div>
             <div className="search-field"><Search size={17}/><input value={personSearch} onChange={e=>setPersonSearch(e.target.value)} placeholder="Rechercher un compte, un numéro ou un rôle…" disabled={!inventory}/></div>
