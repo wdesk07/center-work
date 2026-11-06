@@ -36,17 +36,32 @@ Deno.serve(async (req: Request) => {
   if (!owner) return json(403, { error: "primary_owner_only" });
 
   if (req.method === "GET") {
-    const [profiles, formations, groups] = await Promise.all([
-      db.from("profiles").select("id,display_name,email,status,public_id,first_name,last_name").order("display_name").limit(250),
+    const [profiles, formations, groups, students, staff, teachers, registrations] = await Promise.all([
+      db.from("profiles").select("id,display_name,email,status,public_id,first_name,last_name").order("display_name").limit(500),
       db.from("formations").select("id,code,name,duration,status").order("name").limit(100),
       db.from("groups").select("id,formation_id,code,name,academic_year,capacity,status").order("name").limit(150),
+      db.from("students").select("id,formation_id,group_id,enrollment_date,student_number,education_level").limit(500),
+      db.from("staff").select("id,staff_number,department,position,hire_date,status").limit(250),
+      db.from("teachers").select("id,teacher_number,specialization,hire_date,status").limit(250),
+      db.from("registrations").select("id,registration_number,person_id,formation_id,group_id,registration_date,status,review_comment,created_at").order("created_at", { ascending: false }).limit(500),
     ]);
-    if (profiles.error || formations.error || groups.error) return json(503, { error: "inventory_read_failed" });
+    if (profiles.error || formations.error || groups.error || students.error || staff.error || teachers.error || registrations.error)
+      return json(503, { error: "extended_inventory_read_failed", details: {
+        profiles: profiles.error?.code, formations: formations.error?.code, groups: groups.error?.code,
+        students: students.error?.code, staff: staff.error?.code, teachers: teachers.error?.code,
+        registrations: registrations.error?.code
+      } });
     return json(200, {
       environment: "test",
       owner: { email: owner.email, display_name: owner.display_name, role: owner.owner_role },
-      inventory: { profiles: profiles.data, formations: formations.data, groups: groups.data },
-      capabilities: { inventory_read: true, profile_display_name_update: true, arbitrary_sql: false, hard_delete: false },
+      inventory: {
+        profiles: profiles.data, formations: formations.data, groups: groups.data,
+        students: students.data, staff: staff.data, teachers: teachers.data, registrations: registrations.data
+      },
+      capabilities: {
+        inventory_read: true, people_lookup: true, registration_lookup: true,
+        profile_display_name_update: true, arbitrary_sql: false, hard_delete: false
+      },
     });
   }
 
