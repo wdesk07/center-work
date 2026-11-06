@@ -118,6 +118,7 @@ Deno.serve(async (req: Request) => {
         environment: "test", outcome: "pending", request_id: requestId,
         details: { reason, before: { name: before.name, revoked_at: before.revoked_at }, stage: "revocation_started" },
       }).select("id").single();
+    if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
     if (auditStartError || !auditStart) return json(503, { error: "audit_start_failed_operation_not_started" });
 
     const { data: result, error: revokeError } = await userDb.rpc("revoke_presence_kiosk", { p_device_id: deviceId });
