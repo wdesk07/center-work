@@ -18,7 +18,8 @@ type Dashboard = { owner?: { email: string; display_name: string; role: string }
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
   { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
   { key: "diagnostics", label: "Diagnostics & incidents", icon: Activity, group: "ESPACE DE TRAVAIL" },
-  { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },\n  { key: "commands", label: "Commandes propriétaires", icon: LockKeyhole, group: "PILOTAGE" },
+  { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },
+  { key: "commands", label: "Commandes propriétaires", icon: LockKeyhole, group: "PILOTAGE" },
   { key: "supabase", label: "Supabase", icon: Database, group: "PILOTAGE" },
   { key: "hosting", label: "Hébergement Vercel", icon: Cloud, group: "PILOTAGE" },
   { key: "github", label: "Code & dépôts", icon: Github, group: "PILOTAGE" },
