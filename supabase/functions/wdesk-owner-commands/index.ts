@@ -1,0 +1,90 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
+
+const cors = {
+  "Access-Control-Allow-Origin": Deno.env.get("CONTROL_CENTER_ORIGIN") ?? "https://center-work.vercel.app",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Content-Type": "application/json",
+};
+const json = (status: number, body: Record<string, unknown>) =>
+  new Response(JSON.stringify(body), { status, headers: cors });
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method_not_allowed" });
+
+  const url = Deno.env.get("SUPABASE_URL");
+  const anon = Deno.env.get("SUPABASE_ANON_KEY");
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !anon || !service) return json(503, { error: "server_configuration_missing" });
+
+  const bearer = req.headers.get("Authorization") ?? "";
+  const token = bearer.startsWith("Bearer ") ? bearer.slice(7) : "";
+  if (!token) return json(401, { error: "authentication_required" });
+
+  const auth = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: authData, error: authError } = await auth.auth.getUser(token);
+  const user = authData.user;
+  if (authError || !user?.email || !user.email_confirmed_at) return json(401, { error: "verified_account_required" });
+
+  const db = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: owner, error: ownerError } = await db.schema("wdesk_control").from("owner_accounts")
+    .select("id,email,display_name,owner_role,identity_status")
+    .eq("auth_user_id", user.id).eq("identity_status", "verified").maybeSingle();
+  if (ownerError) return json(503, { error: "owner_verification_unavailable" });
+  if (!owner) return json(403, { error: "primary_owner_only" });
+
+  if (req.method === "GET") {
+    const [profiles, formations, groups] = await Promise.all([
+      db.from("profiles").select("id,display_name,email,status,public_id,first_name,last_name").order("display_name").limit(250),
+      db.from("formations").select("id,code,name,duration,status").order("name").limit(100),
+      db.from("groups").select("id,formation_id,code,name,academic_year,capacity,status").order("name").limit(150),
+    ]);
+    if (profiles.error || formations.error || groups.error) return json(503, { error: "inventory_read_failed" });
+    return json(200, {
+      environment: "test",
+      owner: { email: owner.email, display_name: owner.display_name, role: owner.owner_role },
+      inventory: { profiles: profiles.data, formations: formations.data, groups: groups.data },
+      capabilities: { inventory_read: true, profile_display_name_update: true, arbitrary_sql: false, hard_delete: false },
+    });
+  }
+
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
+  if (body.action !== "profile_display_name_update") return json(400, { error: "unsupported_action" });
+
+  const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+  const targetId = typeof body.target_id === "string" ? body.target_id.trim() : "";
+  const displayName = typeof body.display_name === "string" ? body.display_name.trim() : "";
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  if (!requestId || requestId.length > 100 || !targetId || !displayName || displayName.length > 120 || !reason || reason.length < 8 || reason.length > 500)
+    return json(400, { error: "request_id_target_name_and_reason_required" });
+  if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
+
+  const { data: priorEvent } = await db.schema("wdesk_control").from("audit_events")
+    .select("id").eq("request_id", requestId).maybeSingle();
+  if (priorEvent) return json(409, { error: "request_already_processed" });
+
+  const { data: before, error: readError } = await db.from("profiles")
+    .select("id,display_name,email,status").eq("id", targetId).maybeSingle();
+  if (readError || !before) return json(404, { error: "profile_not_found" });
+  if (before.id === user.id) return json(400, { error: "owner_profile_self_change_not_allowed_here" });
+
+  const { data: after, error: updateError } = await db.from("profiles")
+    .update({ display_name: displayName }).eq("id", targetId)
+    .select("id,display_name,email,status").maybeSingle();
+  if (updateError || !after) return json(409, { error: "profile_update_failed" });
+
+  const { error: auditError } = await db.schema("wdesk_control").from("audit_events").insert({
+    actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
+    action: "profile.display_name_updated", target_type: "profile", target_ref: targetId,
+    environment: "test", outcome: "success", request_id: requestId,
+    details: { reason, before: { display_name: before.display_name }, after: { display_name: after.display_name } },
+  });
+  if (auditError) {
+    await db.from("profiles").update({ display_name: before.display_name }).eq("id", targetId);
+    return json(503, { error: "audit_failed_change_rolled_back" });
+  }
+  return json(200, { ok: true, action: "profile.display_name_updated", before, after, request_id: requestId });
+});
