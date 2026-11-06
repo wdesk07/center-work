@@ -25,7 +25,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
   { key: "hosting", label: "QR et synchronisation", icon: Cloud, group: "AÉRO SERVICE" },
   { key: "github", label: "Maintenance", icon: Github, group: "SYSTÈME" },
   { key: "access", label: "Utilisateurs", icon: Users, group: "AÉRO SERVICE" },
-  { key: "audit", label: "Sécurité et historique", icon: ShieldCheck, group: "SYSTÈME" },
+  { key: "audit", label: "Sécurité et historique", icon: ShieldCheck, group: "SÉCURITÉ" },
   { key: "settings", label: "Paramètres généraux", icon: Settings, group: "SYSTÈME" },
 ];
 
@@ -296,7 +296,7 @@ export default function Home() {
         <div className="workspace-label">WORKSPACE</div>
         <div className="workspace-switch"><div className="workspace-avatar">W</div><span><b>WDesk Principal</b><small>Propriétaire principal</small></span><ChevronDown size={15}/></div>
         <nav className="navigation">
-          {(["ESPACE DE TRAVAIL", "AÉRO SERVICE", "PILOTAGE", "SÉCURITÉ", "SYSTÈME"] as const).map(group => <div className="nav-group" key={group}><p>{group}</p>{nav.filter(item => item.group === group).map(item => { const Icon = item.icon; return <button key={item.key} className={`nav-link ${active === item.key ? "nav-active" : ""}`} onClick={() => choose(item.key)}><Icon size={17}/><span>{item.label}</span>{item.key === "audit" && audits.length > 0 && <span className="nav-dot"/>}</button>; })}</div>)}
+          {(["ESPACE DE TRAVAIL", "AÉRO SERVICE", "SÉCURITÉ", "SYSTÈME"] as const).map(group => <div className="nav-group" key={group}><p>{group}</p>{nav.filter(item => item.group === group).map(item => { const Icon = item.icon; return <button key={item.key} className={`nav-link ${active === item.key ? "nav-active" : ""}`} onClick={() => choose(item.key)}><Icon size={17}/><span>{item.label}</span>{item.key === "audit" && audits.length > 0 && <span className="nav-dot"/>}</button>; })}</div>)}
         </nav>
         <div className="sidebar-bottom"><div className="security-note"><ShieldCheck size={17}/><span><b>{data?.owner ? "Identité vérifiée" : "Espace protégé"}</b><small>{data?.owner?.role === "primary_owner" ? "Propriétaire principal" : data?.owner ? data.owner.role : "Vérification requise"}</small></span></div><div className="profile"><div className="profile-avatar">WO</div><div><b>{data?.owner?.display_name ?? "WDESK OWNER"}</b><small>{data?.owner?.email ?? "wdesk87@gmail.com"}</small></div><button aria-label="Paramètres du compte" onClick={() => choose("settings")}><Settings size={16}/></button></div></div>
       </aside>
