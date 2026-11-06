@@ -63,7 +63,7 @@ export default function Home() {
     profiles: any[]; formations: any[]; groups: any[]; students: any[]; staff: any[]; teachers: any[]; registrations: any[];
     daily_attendance: any[]; session_attendance: any[]; course_sessions: any[]; weekly_schedule: any[];
     qr_requests: any[]; kiosk_devices: any[]; offline_events: any[]; operating_days: any[];
-    justifications: any[]; penalties: any[]; penalty_rules: any[]; payments: any[];
+    justifications: any[]; penalties: any[]; penalty_rules: any[]; payments: any[]; roles: any[]; user_roles: any[];
   } | null>(null);
   const [personSearch, setPersonSearch] = useState("");
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -272,7 +272,8 @@ export default function Home() {
     const linkedStaff = inventory?.staff.find((x: any) => x.id === p.id);
     const linkedTeacher = inventory?.teachers.find((x: any) => x.id === p.id);
     const registrationText = inventory?.registrations.filter((x: any) => x.person_id === p.id).map((x: any) => x.registration_number).join(" ") ?? "";
-    return [p.display_name,p.first_name,p.last_name,p.email,p.public_id,linkedStudent?.student_number,linkedStaff?.staff_number,linkedTeacher?.teacher_number,registrationText].some(v => String(v ?? "").toLowerCase().includes(q));
+    const roleText = inventory?.user_roles.filter((x: any) => x.user_id === p.id).map((x: any) => inventory?.roles.find((r: any) => r.id === x.role_id)?.code ?? "").join(" ") ?? "";
+    return [p.display_name,p.first_name,p.last_name,p.email,p.public_id,linkedStudent?.student_number,linkedStaff?.staff_number,linkedTeacher?.teacher_number,registrationText,roleText].some(v => String(v ?? "").toLowerCase().includes(q));
   }).slice(0, 30);
 
   function choose(key: ModuleKey) {
@@ -456,10 +457,12 @@ export default function Home() {
               const staffMember = inventory.staff.find((x: any) => x.id === p.id);
               const teacher = inventory.teachers.find((x: any) => x.id === p.id);
               const regs = inventory.registrations.filter((x: any) => x.person_id === p.id);
+              const roles = inventory.user_roles.filter((x: any) => x.user_id === p.id).map((x: any) => inventory.roles.find((r: any) => r.id === x.role_id)?.code).filter(Boolean);
               const formation = inventory.formations.find((x: any) => x.id === (student?.formation_id ?? regs[0]?.formation_id));
               const group = inventory.groups.find((x: any) => x.id === (student?.group_id ?? regs[0]?.group_id));
               const kind = student ? "Apprenant" : staffMember ? "Personnel" : teacher ? "Formateur" : "Profil sans fiche métier liée";
-              return <div className="audit-row" key={p.id}><div><b>{p.display_name || [p.first_name,p.last_name].filter(Boolean).join(" ") || "Sans nom"} · {kind}</b><small>{p.email || "Sans e-mail"} · {p.public_id || student?.student_number || staffMember?.staff_number || teacher?.teacher_number || p.id}</small><small>Formation : {formation?.name ?? "Non associée"} · Groupe : {group?.name ?? "Non associé"}</small><small>Inscriptions : {regs.length ? regs.map((x: any) => `${x.registration_number} (${x.status})`).join(" · ") : "Aucune inscription retrouvée"}</small></div><Status tone={p.status === "active" ? "good" : "warn"}>{p.status}</Status></div>;
+              return <div className="audit-row" key={p.id}><div><b>{p.display_name || [p.first_name,p.last_name].filter(Boolean).join(" ") || "Sans nom"} · {kind}</b><small>{p.email || "Sans e-mail"} · {p.public_id || student?.student_number || staffMember?.staff_number || teacher?.teacher_number || p.id}</small><small>Formation : {formation?.name ?? "Non associée"} · Groupe : {group?.name ?? "Non associé"}</small><small>Inscriptions : {regs.length ? regs.map((x: any) => `${x.registration_number} (${x.status})`).join(" · ") : "Aucune inscription retrouvée"}</small>
+                <small>Rôles : {roles.length ? roles.join(" · ") : "Aucun rôle attribué"}</small></div><Status tone={p.status === "active" ? "good" : "warn"}>{p.status}</Status></div>;
             })}{matchedProfiles.length === 0 && <div className="empty-state"><b>Aucun compte correspondant</b><span>La recherche porte sur les profils et identifiants actuellement chargés en TEST.</span></div>}</div>}
             <form className="module-panel" onSubmit={submitProfileNameChange}>
               <h3>Modifier le nom affiché d’un profil</h3>
