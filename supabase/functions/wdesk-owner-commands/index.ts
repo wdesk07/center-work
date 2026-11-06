@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
         penalties: penalties.data, penalty_rules: penaltyRules.data, payments: payments.data
       },
       capabilities: {
-        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true, kiosk_device_revoke: true,
+        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true, kiosk_device_revoke: true, payment_validate: true,
         profile_display_name_update: true, student_assignment_repair: true, transactional_operations: true, arbitrary_sql: false, hard_delete: false
       },
     });
@@ -96,6 +96,82 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
+  if (body.action === "payment_validate") {
+    const paymentId = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(paymentId) || !requestId || requestId.length > 100 || reason.length < 8 || reason.length > 500)
+      return json(400, { error: "payment_validation_reason_required" });
+    if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
+
+    const { data: before, error: beforeError } = await db.from("payments")
+      .select("id,person_id,penalty_id,amount_fcfa,payment_type,status,receipt_number,received_at,validated_at")
+      .eq("id", paymentId).maybeSingle();
+    if (beforeError) return json(503, { error: "payment_lookup_failed" });
+    if (!before) return json(404, { error: "payment_not_found" });
+    if (before.status !== "pending") return json(409, { error: "payment_not_pending_or_already_final" });
+
+    let penaltyBefore: Record<string, unknown> | null = null;
+    let attendanceBefore: Record<string, unknown> | null = null;
+    if (before.penalty_id) {
+      const { data } = await db.from("penalties").select("id,status,amount_fcfa,daily_attendance_id").eq("id", before.penalty_id).maybeSingle();
+      penaltyBefore = data;
+      if (data?.daily_attendance_id) {
+        const { data: attendance } = await db.from("daily_attendance").select("id,status,local_date,arrived_at").eq("id", data.daily_attendance_id).maybeSingle();
+        attendanceBefore = attendance;
+      }
+    }
+
+    const { data: auditStart, error: auditStartError } = await db.schema("wdesk_control").from("audit_events")
+      .insert({
+        actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
+        action: "payment.validated", target_type: "payment", target_ref: paymentId,
+        environment: "test", outcome: "pending", request_id: requestId,
+        details: { reason, before: { status: before.status, amount_fcfa: before.amount_fcfa, penalty_id: before.penalty_id }, stage: "validation_started" },
+      }).select("id").single();
+    if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
+    if (auditStartError || !auditStart) return json(503, { error: "audit_start_failed_operation_not_started" });
+
+    const { data: after, error: validationError } = await userDb.from("payments")
+      .update({ status: "validated" })
+      .eq("id", paymentId).eq("status", "pending")
+      .select("id,person_id,penalty_id,amount_fcfa,payment_type,status,receipt_number,received_at,validated_at,validated_by")
+      .maybeSingle();
+    if (validationError || !after) {
+      await db.schema("wdesk_control").from("audit_events").update({
+        outcome: "failure",
+        details: { reason, before: { status: before.status, amount_fcfa: before.amount_fcfa, penalty_id: before.penalty_id }, failure_code: validationError?.code ?? "payment_not_updated" },
+      }).eq("id", auditStart.id);
+      if ((validationError?.message ?? "").includes("FINAL_PAYMENT_IMMUTABLE")) return json(409, { error: "payment_already_final" });
+      if ((validationError?.message ?? "").includes("PENALTY_NOT_PAYABLE")) return json(409, { error: "linked_penalty_not_payable" });
+      if ((validationError?.message ?? "").includes("Unauthorized payment validation")) return json(403, { error: "aero_finance_role_required" });
+      return json(409, { error: "payment_validation_rejected_by_aero_service_rules" });
+    }
+
+    let penaltyAfter: Record<string, unknown> | null = null;
+    let attendanceAfter: Record<string, unknown> | null = null;
+    if (after.penalty_id) {
+      const { data } = await db.from("penalties").select("id,status,amount_fcfa,daily_attendance_id").eq("id", after.penalty_id).maybeSingle();
+      penaltyAfter = data;
+      if (data?.daily_attendance_id) {
+        const { data: attendance } = await db.from("daily_attendance").select("id,status,local_date,arrived_at").eq("id", data.daily_attendance_id).maybeSingle();
+        attendanceAfter = attendance;
+      }
+    }
+    const { error: auditFinishError } = await db.schema("wdesk_control").from("audit_events").update({
+      outcome: "success",
+      details: {
+        reason,
+        before: { payment: before, penalty: penaltyBefore, attendance: attendanceBefore },
+        after: { payment: after, penalty: penaltyAfter, attendance: attendanceAfter },
+        effects: { receipt_generated: Boolean(after.receipt_number), penalty_regularized: penaltyBefore?.status === "pending" && penaltyAfter?.status === "paid", attendance_regularized: attendanceBefore?.status === "late" && attendanceAfter?.status === "regularized" },
+      },
+    }).eq("id", auditStart.id);
+    if (auditFinishError) return json(200, { ok: true, action: "payment.validated", after, audit_warning: "operation_completed_audit_update_failed" });
+    return json(200, { ok: true, action: "payment.validated", before, after, penalty_before: penaltyBefore, penalty_after: penaltyAfter, attendance_before: attendanceBefore, attendance_after: attendanceAfter, request_id: requestId });
+  }
+
   if (body.action === "kiosk_device_revoke") {
     const deviceId = typeof body.target_id === "string" ? body.target_id.trim() : "";
     const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
