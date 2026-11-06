@@ -36,7 +36,12 @@ Deno.serve(async (req: Request) => {
   if (!owner) return json(403, { error: "primary_owner_only" });
 
   if (req.method === "GET") {
-    const [profiles, formations, groups, students, staff, teachers, registrations] = await Promise.all([
+    const [
+      profiles, formations, groups, students, staff, teachers, registrations,
+      dailyAttendance, sessionAttendance, courseSessions, weeklySchedule,
+      qrRequests, kioskDevices, offlineEvents, operatingDays,
+      justifications, penalties, penaltyRules, payments
+    ] = await Promise.all([
       db.from("profiles").select("id,display_name,email,status,public_id,first_name,last_name").order("display_name").limit(500),
       db.from("formations").select("id,code,name,duration,status").order("name").limit(100),
       db.from("groups").select("id,formation_id,code,name,academic_year,capacity,status").order("name").limit(150),
@@ -44,22 +49,45 @@ Deno.serve(async (req: Request) => {
       db.from("staff").select("id,staff_number,department,position,hire_date,status").limit(250),
       db.from("teachers").select("id,teacher_number,specialization,hire_date,status").limit(250),
       db.from("registrations").select("id,registration_number,person_id,formation_id,group_id,registration_date,status,review_comment,created_at").order("created_at", { ascending: false }).limit(500),
+      db.from("daily_attendance").select("id,person_id,local_date,person_type,nominal_time,cutoff_time,arrived_at,status,minutes_after_cutoff,created_at").order("local_date", { ascending: false }).limit(1000),
+      db.from("session_attendance").select("id,person_id,session_id,local_date,status,arrived_at,nominal_time,cutoff_time,minutes_after_cutoff,source,updated_at").order("local_date", { ascending: false }).limit(1000),
+      db.from("course_sessions").select("id,formation_id,group_id,session_date,planned_start,planned_end,status,subject").order("session_date", { ascending: false }).limit(500),
+      db.from("formation_weekly_schedule").select("id,formation_id,weekday_iso,subject,planned_start,planned_end,active").order("weekday_iso").limit(500),
+      db.from("qr_checkin_requests").select("id,person_id,session_id,requested_at,status,reviewed_by,reviewed_at,daily_attendance_id,penalty_id,rejection_reason,created_at").order("requested_at", { ascending: false }).limit(500),
+      db.from("presence_kiosk_devices").select("id,name,activated_by,activated_at,last_used_at,revoked_at").order("activated_at", { ascending: false }).limit(100),
+      db.from("attendance_offline_events").select("id,person_identifier,person_name,observed_at,reason,device_label,review_status,review_note,reviewed_by,reviewed_at,received_at").order("observed_at", { ascending: false }).limit(500),
+      db.from("operating_days").select("business_date,status,opened_at,opened_by,closed_at,closed_by,updated_at").order("business_date", { ascending: false }).limit(100),
+      db.from("absence_justifications").select("id,attendance_id,person_id,reason_type,reason,submitted_at,status,reviewed_by,reviewed_at,review_comment").order("submitted_at", { ascending: false }).limit(500),
+      db.from("penalties").select("id,person_id,amount_fcfa,status,created_at,penalty_type,description,rule_id,daily_attendance_id").order("created_at", { ascending: false }).limit(500),
+      db.from("penalty_rules").select("id,person_type,penalty_type,description,target_scope,application_mode,applies_after_time,min_delay_minutes,max_delay_minutes,tolerance_minutes,amount_fcfa,blocks_access,priority,active,effective_from,effective_until,formation_id").order("priority").limit(250),
+      db.from("payments").select("id,penalty_id,person_id,amount_fcfa,method,provider,transaction_reference,status,received_at,received_by,validated_at,validated_by,refusal_reason,receipt_number,payment_type,payment_category,payment_description").order("received_at", { ascending: false }).limit(500),
     ]);
-    if (profiles.error || formations.error || groups.error || students.error || staff.error || teachers.error || registrations.error)
-      return json(503, { error: "extended_inventory_read_failed", details: {
-        profiles: profiles.error?.code, formations: formations.error?.code, groups: groups.error?.code,
-        students: students.error?.code, staff: staff.error?.code, teachers: teachers.error?.code,
-        registrations: registrations.error?.code
-      } });
+    const readErrors = {
+      profiles: profiles.error?.code, formations: formations.error?.code, groups: groups.error?.code,
+      students: students.error?.code, staff: staff.error?.code, teachers: teachers.error?.code,
+      registrations: registrations.error?.code, daily_attendance: dailyAttendance.error?.code,
+      session_attendance: sessionAttendance.error?.code, course_sessions: courseSessions.error?.code,
+      weekly_schedule: weeklySchedule.error?.code, qr_requests: qrRequests.error?.code,
+      kiosk_devices: kioskDevices.error?.code, offline_events: offlineEvents.error?.code,
+      operating_days: operatingDays.error?.code, justifications: justifications.error?.code,
+      penalties: penalties.error?.code, penalty_rules: penaltyRules.error?.code, payments: payments.error?.code
+    };
+    if (Object.values(readErrors).some(Boolean))
+      return json(503, { error: "extended_inventory_read_failed", details: readErrors });
     return json(200, {
       environment: "test",
       owner: { email: owner.email, display_name: owner.display_name, role: owner.owner_role },
       inventory: {
         profiles: profiles.data, formations: formations.data, groups: groups.data,
-        students: students.data, staff: staff.data, teachers: teachers.data, registrations: registrations.data
+        students: students.data, staff: staff.data, teachers: teachers.data, registrations: registrations.data,
+        daily_attendance: dailyAttendance.data, session_attendance: sessionAttendance.data,
+        course_sessions: courseSessions.data, weekly_schedule: weeklySchedule.data,
+        qr_requests: qrRequests.data, kiosk_devices: kioskDevices.data, offline_events: offlineEvents.data,
+        operating_days: operatingDays.data, justifications: justifications.data,
+        penalties: penalties.data, penalty_rules: penaltyRules.data, payments: payments.data
       },
       capabilities: {
-        inventory_read: true, people_lookup: true, registration_lookup: true,
+        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true,
         profile_display_name_update: true, student_assignment_repair: true, transactional_operations: true, arbitrary_sql: false, hard_delete: false
       },
     });
