@@ -452,6 +452,25 @@ export default function Home() {
               <div className="audit-list">{inventory.qr_requests.map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{new Date(x.requested_at).toLocaleString("fr-FR")} · {x.rejection_reason ?? "Aucun motif de rejet"}</small></div><Status tone={x.status==="approved"?"good":x.status==="rejected"?"warn":"muted"}>{x.status}</Status></div>)}</div>
               <div className="section-title"><div><h2>Événements à synchroniser ou examiner</h2><p>Une décision de revue n’est pas appliquée automatiquement.</p></div></div>
               <div className="audit-list">{inventory.offline_events.map((x:any)=><div className="audit-row" key={x.id}><div><b>{x.person_name ?? x.person_identifier}</b><small>{new Date(x.observed_at).toLocaleString("fr-FR")} · {x.reason ?? "Aucun motif"} · {x.device_label ?? "Appareil inconnu"}</small></div><Status>{x.review_status}</Status></div>)}</div>
+              <form className="module-panel" onSubmit={submitQrReview}>
+                <h3>Traiter une demande QR</h3>
+                <p>L’approbation utilise la règle Aéro Service existante : elle peut créer le pointage et appliquer une pénalité de retard. Le rejet exige également un motif. Toute décision est confirmée et auditée.</p>
+                <label className="command-label">Demande en attente</label>
+                <select value={qrTarget} onChange={e=>setQrTarget(e.target.value)} required>
+                  <option value="">Choisir une demande QR…</option>
+                  {(inventory.qr_requests ?? []).filter((x:any)=>x.status==="pending_confirmation").map((x:any)=><option key={x.id} value={x.id}>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id} · {new Date(x.requested_at).toLocaleString("fr-FR")}</option>)}
+                </select>
+                <label className="command-label">Décision</label>
+                <select value={qrDecision} onChange={e=>setQrDecision(e.target.value as "approved"|"rejected")}>
+                  <option value="approved">Approuver la demande</option>
+                  <option value="rejected">Rejeter la demande</option>
+                </select>
+                <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
+                <textarea value={qrReason} onChange={e=>setQrReason(e.target.value)} minLength={8} maxLength={500} required />
+                <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+                <input value={qrConfirmation} onChange={e=>setQrConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+                <button className="primary-button" type="submit" disabled={commandBusy || !qrTarget}>{commandBusy ? "Traitement…" : "Confirmer la décision QR"} <ShieldCheck size={16}/></button>
+              </form>
             </> : <div className="empty-state">Charge l’inventaire TEST.</div>}
           </div>}
 
@@ -483,25 +502,7 @@ export default function Home() {
                   {!inventory.kiosk_devices.length && <div className="empty-state">Aucun appareil de borne recensé.</div>}
                 </article>
               </div>
-              <form className="module-panel" onSubmit={submitQrReview}>
-                <h3>Traiter une demande QR</h3>
-                <p>L’approbation utilise la règle Aéro Service existante : elle peut créer le pointage et appliquer une pénalité de retard. Le rejet exige également un motif. Toute décision est confirmée et auditée.</p>
-                <label className="command-label">Demande en attente</label>
-                <select value={qrTarget} onChange={e=>setQrTarget(e.target.value)} required>
-                  <option value="">Choisir une demande QR…</option>
-                  {(inventory.qr_requests ?? []).filter((x:any)=>x.status==="pending_confirmation").map((x:any)=><option key={x.id} value={x.id}>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id} · {new Date(x.requested_at).toLocaleString("fr-FR")}</option>)}
-                </select>
-                <label className="command-label">Décision</label>
-                <select value={qrDecision} onChange={e=>setQrDecision(e.target.value as "approved"|"rejected")}>
-                  <option value="approved">Approuver la demande</option>
-                  <option value="rejected">Rejeter la demande</option>
-                </select>
-                <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
-                <textarea value={qrReason} onChange={e=>setQrReason(e.target.value)} minLength={8} maxLength={500} required />
-                <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
-                <input value={qrConfirmation} onChange={e=>setQrConfirmation(e.target.value)} placeholder="CONFIRMER" required />
-                <button className="primary-button" type="submit" disabled={commandBusy || !qrTarget}>{commandBusy ? "Traitement…" : "Confirmer la décision QR"} <ShieldCheck size={16}/></button>
-              </form>
+
               <form className="module-panel" onSubmit={submitKioskRevoke}>
                 <h3>Révoquer une borne</h3>
                 <p>Action sensible : révoque immédiatement le jeton de la borne sélectionnée. La borne sera bloquée jusqu’à une nouvelle activation depuis Aéro Service. Motif et confirmation obligatoires.</p>
