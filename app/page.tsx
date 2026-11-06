@@ -77,6 +77,10 @@ export default function Home() {
   const [assignmentGroup, setAssignmentGroup] = useState("");
   const [assignmentReason, setAssignmentReason] = useState("");
   const [assignmentConfirmation, setAssignmentConfirmation] = useState("");
+  const [qrTarget, setQrTarget] = useState("");
+  const [qrDecision, setQrDecision] = useState<"approved" | "rejected">("approved");
+  const [qrReason, setQrReason] = useState("");
+  const [qrConfirmation, setQrConfirmation] = useState("");
 
   async function refresh() {
     setLoading(true);
@@ -160,6 +164,34 @@ export default function Home() {
       await loadCommandInventory();
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la réparation."); }
+    finally { setCommandBusy(false); }
+  }
+
+  async function submitQrReview(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!qrTarget || qrReason.trim().length < 8 || qrConfirmation !== "CONFIRMER") {
+      setNotice("Choisis une demande QR, indique le motif et saisis CONFIRMER.");
+      return;
+    }
+    setCommandBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "qr_checkin_review", target_id: qrTarget, decision: qrDecision,
+          reason: qrReason.trim(), confirmation: "CONFIRMER", request_id: crypto.randomUUID(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Décision QR refusée");
+      setNotice(qrDecision === "approved"
+        ? "Demande QR approuvée par les règles Aéro Service TEST. Vérifie le résultat et toute pénalité éventuelle."
+        : "Demande QR rejetée et motif enregistré dans l’historique TEST.");
+      setQrTarget(""); setQrReason(""); setQrConfirmation("");
+      await loadCommandInventory();
+      await refresh();
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la décision QR."); }
     finally { setCommandBusy(false); }
   }
 
@@ -268,6 +300,25 @@ export default function Home() {
                   {!inventory.kiosk_devices.length && <div className="empty-state">Aucun appareil de borne recensé.</div>}
                 </article>
               </div>
+              <form className="module-panel" onSubmit={submitQrReview}>
+                <h3>Traiter une demande QR</h3>
+                <p>L’approbation utilise la règle Aéro Service existante : elle peut créer le pointage et appliquer une pénalité de retard. Le rejet exige également un motif. Toute décision est confirmée et auditée.</p>
+                <label className="command-label">Demande en attente</label>
+                <select value={qrTarget} onChange={e=>setQrTarget(e.target.value)} required>
+                  <option value="">Choisir une demande QR…</option>
+                  {(inventory.qr_requests ?? []).filter((x:any)=>x.status==="pending_confirmation").map((x:any)=><option key={x.id} value={x.id}>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id} · {new Date(x.requested_at).toLocaleString("fr-FR")}</option>)}
+                </select>
+                <label className="command-label">Décision</label>
+                <select value={qrDecision} onChange={e=>setQrDecision(e.target.value as "approved"|"rejected")}>
+                  <option value="approved">Approuver la demande</option>
+                  <option value="rejected">Rejeter la demande</option>
+                </select>
+                <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
+                <textarea value={qrReason} onChange={e=>setQrReason(e.target.value)} minLength={8} maxLength={500} required />
+                <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+                <input value={qrConfirmation} onChange={e=>setQrConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+                <button className="primary-button" type="submit" disabled={commandBusy || !qrTarget}>{commandBusy ? "Traitement…" : "Confirmer la décision QR"} <ShieldCheck size={16}/></button>
+              </form>
               <div className="lower-grid">
                 <article className="panel"><div className="panel-heading"><div><h3>Pointages récents</h3><p>Statut et heure d’arrivée depuis la table journalière</p></div><span className="count-pill">{inventory.daily_attendance.length}</span></div>
                   {inventory.daily_attendance.slice(0,15).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{x.local_date} · {x.arrived_at ? new Date(x.arrived_at).toLocaleTimeString("fr-FR") : "Pas d’heure d’arrivée"} · {x.minutes_after_cutoff ?? 0} min après limite</small></div><Status tone={String(x.status).toLowerCase().includes("present")?"good":String(x.status).toLowerCase().includes("late")||String(x.status).toLowerCase().includes("retard")?"warn":"muted"}>{x.status}</Status></div>)}
