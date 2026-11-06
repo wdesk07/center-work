@@ -31,7 +31,8 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
   diagnostics: { title: "Diagnostics & incidents", intro: "Contrôles agrégés en direct sur les données TEST. Les limites de mesure sont affichées explicitement." },
-  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },\n  commands: { title: "Commandes propriétaires", intro: "Inventaire TEST et première action réversible, réservés au propriétaire vérifié." },
+  projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
+  commands: { title: "Commandes propriétaires", intro: "Inventaire TEST et première action réversible, réservés au propriétaire vérifié." },
   supabase: { title: "Supabase", intro: "Accès à la console, inventaire des projets et état de la liaison du registre." },
   hosting: { title: "Hébergement Vercel", intro: "Accès à la console Vercel et au déploiement du centre. Les commandes API attendent une intégration sécurisée." },
   github: { title: "Code & dépôts", intro: "Accès aux dépôts WDESK et au code du centre. Les opérations d’écriture seront protégées et auditées." },
