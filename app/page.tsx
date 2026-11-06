@@ -65,6 +65,11 @@ export default function Home() {
   const [changeReason, setChangeReason] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [commandBusy, setCommandBusy] = useState(false);
+  const [assignmentTarget, setAssignmentTarget] = useState("");
+  const [assignmentFormation, setAssignmentFormation] = useState("");
+  const [assignmentGroup, setAssignmentGroup] = useState("");
+  const [assignmentReason, setAssignmentReason] = useState("");
+  const [assignmentConfirmation, setAssignmentConfirmation] = useState("");
 
   async function refresh() {
     setLoading(true);
@@ -121,6 +126,33 @@ export default function Home() {
       await loadCommandInventory();
       await refresh();
     } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la commande."); }
+    finally { setCommandBusy(false); }
+  }
+
+  async function submitStudentAssignmentRepair(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!assignmentTarget || !assignmentFormation || assignmentReason.trim().length < 8 || assignmentConfirmation !== "CONFIRMER") {
+      setNotice("Choisis l’apprenant et la formation, indique un motif et saisis CONFIRMER.");
+      return;
+    }
+    setCommandBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/commands", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "student_assignment_repair", target_id: assignmentTarget,
+          formation_id: assignmentFormation, group_id: assignmentGroup || null,
+          reason: assignmentReason.trim(), confirmation: "CONFIRMER", request_id: crypto.randomUUID(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Réparation refusée");
+      setNotice("Association apprenant / formation / groupe réparée en TEST. Modification inscrite au journal d’audit.");
+      setAssignmentReason(""); setAssignmentConfirmation("");
+      await loadCommandInventory();
+      await refresh();
+    } catch (e) { setNotice(e instanceof Error ? e.message : "Échec de la réparation."); }
     finally { setCommandBusy(false); }
   }
 
@@ -235,6 +267,33 @@ export default function Home() {
               <label className="command-label">Motif obligatoire (8 caractères minimum)</label><textarea value={changeReason} onChange={e=>setChangeReason(e.target.value)} minLength={8} maxLength={500} required />
               <label className="command-label">Confirmation explicite : saisir CONFIRMER</label><input value={confirmation} onChange={e=>setConfirmation(e.target.value)} placeholder="CONFIRMER" required />
               <button className="primary-button" type="submit" disabled={commandBusy || !inventory}>{commandBusy ? "Traitement…" : "Confirmer la modification"} <ShieldCheck size={16}/></button>
+            </form>
+            <form className="module-panel" onSubmit={submitStudentAssignmentRepair}>
+              <h3>Réparer l’association d’un apprenant</h3>
+              <p>Met à jour la fiche apprenant et sa dernière inscription approuvée. La borne utilise la formation et le groupe de la fiche apprenant pour retrouver le cours du jour.</p>
+              <label className="command-label">Apprenant</label>
+              <select value={assignmentTarget} onChange={e => setAssignmentTarget(e.target.value)} required>
+                <option value="">Choisir un apprenant…</option>
+                {(inventory?.students ?? []).map((student: any) => {
+                  const profile = inventory?.profiles.find((p: any) => p.id === student.id);
+                  return <option key={student.id} value={student.id}>{profile?.display_name || profile?.email || student.student_number || student.id}</option>;
+                })}
+              </select>
+              <label className="command-label">Formation active</label>
+              <select value={assignmentFormation} onChange={e => { setAssignmentFormation(e.target.value); setAssignmentGroup(""); }} required>
+                <option value="">Choisir une formation…</option>
+                {(inventory?.formations ?? []).filter((x: any) => x.status === "active").map((x: any) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+              <label className="command-label">Groupe (facultatif)</label>
+              <select value={assignmentGroup} onChange={e => setAssignmentGroup(e.target.value)} disabled={!assignmentFormation}>
+                <option value="">Aucun groupe</option>
+                {(inventory?.groups ?? []).filter((x: any) => x.formation_id === assignmentFormation && x.status === "active").map((x: any) => <option key={x.id} value={x.id}>{x.name} · {x.academic_year}</option>)}
+              </select>
+              <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
+              <textarea value={assignmentReason} onChange={e => setAssignmentReason(e.target.value)} minLength={8} maxLength={500} required />
+              <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+              <input value={assignmentConfirmation} onChange={e => setAssignmentConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+              <button className="primary-button" type="submit" disabled={commandBusy || !inventory || !assignmentTarget || !assignmentFormation}>{commandBusy ? "Réparation…" : "Confirmer la réparation" } <ShieldCheck size={16}/></button>
             </form>
             {inventory && <div className="section-title"><div><h2>Catalogue des formations</h2><p>Lecture seule</p></div></div>}
             {inventory?.formations.map(x=><div className="audit-row" key={x.id}><div><b>{x.name}</b><small>{x.code} · {x.duration ?? "Durée non précisée"}</small></div><Status>{x.status}</Status></div>)}
