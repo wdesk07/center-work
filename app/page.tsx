@@ -38,7 +38,7 @@ const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   supabase: { title: "Supabase", intro: "Accès à la console, inventaire des projets et état de la liaison du registre." },
   hosting: { title: "Hébergement Vercel", intro: "Accès à la console Vercel et au déploiement du centre. Les commandes API attendent une intégration sécurisée." },
   github: { title: "Code & dépôts", intro: "Accès aux dépôts WDESK et au code du centre. Les opérations d’écriture seront protégées et auditées." },
-  access: { title: "Utilisateurs & accès", intro: "État de l’identité propriétaire. La gestion des autres opérateurs sera activée après mise en place des règles dédiées." },
+  access: { title: "Utilisateurs & accès", intro: "Recherche réelle des comptes Aéro Service TEST, des fiches métier, des inscriptions et des rôles attribués." },
   audit: { title: "Journal d’audit", intro: "Événements réellement enregistrés par l’API du centre." },
   settings: { title: "Paramètres & connexions", intro: "État des intégrations et des prérequis de sécurité." },
 };
