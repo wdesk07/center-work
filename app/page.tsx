@@ -7,7 +7,7 @@ import {
   Search, Settings, ShieldCheck, Users, X, RefreshCw, ExternalLink, ClipboardList
 } from "lucide-react";
 
-type ModuleKey = "overview" | "diagnostics" | "projects" | "commands" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
+type ModuleKey = "overview" | "aero" | "diagnostics" | "projects" | "commands" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
 type Project = { id?: string; platform: string; project_name: string; environment: string; external_ref?: string | null; dashboard_url?: string | null; connection_status: string; notes?: string | null; updated_at?: string };
 type AuditEvent = { id: number; occurred_at: string; actor_email?: string; action: string; target_type?: string; target_ref?: string; environment: string; outcome: string; details?: Record<string, unknown> };
 type DiagnosticCheck = { component: string; check_name: string; count: number; status: string; explanation: string };
@@ -17,6 +17,7 @@ type Dashboard = { owner?: { email: string; display_name: string; role: string }
 
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
   { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
+  { key: "aero", label: "Aéro Service · Opérations", icon: ClipboardList, group: "AÉRO SERVICE" },
   { key: "diagnostics", label: "Diagnostics & incidents", icon: Activity, group: "ESPACE DE TRAVAIL" },
   { key: "projects", label: "Projets & infrastructures", icon: Blocks, group: "PILOTAGE" },
   { key: "commands", label: "Commandes propriétaires", icon: LockKeyhole, group: "PILOTAGE" },
@@ -30,6 +31,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
+  aero: { title: "Aéro Service · Opérations", intro: "Inventaire opérationnel réel du projet Aéro Service TEST : présence, borne, QR, cours et finances. Lecture seule à ce stade." },
   diagnostics: { title: "Diagnostics & incidents", intro: "Contrôles agrégés en direct sur les données TEST. Les limites de mesure sont affichées explicitement." },
   projects: { title: "Projets & infrastructures", intro: "Inventaire issu du registre sécurisé du centre. Un élément recensé n’est pas automatiquement une connexion fournisseur." },
   commands: { title: "Commandes propriétaires", intro: "Inventaire TEST et première action réversible, réservés au propriétaire vérifié." },
@@ -57,7 +59,12 @@ export default function Home() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [inventory, setInventory] = useState<{profiles: any[]; formations: any[]; groups: any[]; students: any[]; staff: any[]; teachers: any[]; registrations: any[]} | null>(null);
+  const [inventory, setInventory] = useState<{
+    profiles: any[]; formations: any[]; groups: any[]; students: any[]; staff: any[]; teachers: any[]; registrations: any[];
+    daily_attendance: any[]; session_attendance: any[]; course_sessions: any[]; weekly_schedule: any[];
+    qr_requests: any[]; kiosk_devices: any[]; offline_events: any[]; operating_days: any[];
+    justifications: any[]; penalties: any[]; penalty_rules: any[]; payments: any[];
+  } | null>(null);
   const [personSearch, setPersonSearch] = useState("");
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState("");
@@ -189,7 +196,7 @@ export default function Home() {
         <div className="workspace-label">WORKSPACE</div>
         <div className="workspace-switch"><div className="workspace-avatar">W</div><span><b>WDesk Principal</b><small>Propriétaire principal</small></span><ChevronDown size={15}/></div>
         <nav className="navigation">
-          {(["ESPACE DE TRAVAIL", "PILOTAGE", "SÉCURITÉ", "SYSTÈME"] as const).map(group => <div className="nav-group" key={group}><p>{group}</p>{nav.filter(item => item.group === group).map(item => { const Icon = item.icon; return <button key={item.key} className={`nav-link ${active === item.key ? "nav-active" : ""}`} onClick={() => choose(item.key)}><Icon size={17}/><span>{item.label}</span>{item.key === "audit" && audits.length > 0 && <span className="nav-dot"/>}</button>; })}</div>)}
+          {(["ESPACE DE TRAVAIL", "AÉRO SERVICE", "PILOTAGE", "SÉCURITÉ", "SYSTÈME"] as const).map(group => <div className="nav-group" key={group}><p>{group}</p>{nav.filter(item => item.group === group).map(item => { const Icon = item.icon; return <button key={item.key} className={`nav-link ${active === item.key ? "nav-active" : ""}`} onClick={() => choose(item.key)}><Icon size={17}/><span>{item.label}</span>{item.key === "audit" && audits.length > 0 && <span className="nav-dot"/>}</button>; })}</div>)}
         </nav>
         <div className="sidebar-bottom"><div className="security-note"><ShieldCheck size={17}/><span><b>{data?.owner ? "Identité vérifiée" : "Espace protégé"}</b><small>{data?.owner?.role === "primary_owner" ? "Propriétaire principal" : data?.owner ? data.owner.role : "Vérification requise"}</small></span></div><div className="profile"><div className="profile-avatar">WO</div><div><b>{data?.owner?.display_name ?? "WDESK OWNER"}</b><small>{data?.owner?.email ?? "wdesk87@gmail.com"}</small></div><button aria-label="Paramètres du compte" onClick={() => choose("settings")}><Settings size={16}/></button></div></div>
       </aside>
@@ -238,6 +245,50 @@ export default function Home() {
           </div>}
 
           {active === "projects" && <div className="panel project-panel"><div className="panel-heading"><div><h3>Inventaire des projets</h3><p>Données issues du registre sécurisé, sans projets fictifs ajoutés à l’écran.</p></div><span className="count-pill">{projects.length} éléments</span></div><div className="search-field"><Search size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un projet…"/></div><div className="project-list">{filteredProjects.map(p => <article className="project-row" key={p.id ?? p.project_name}><div className="project-symbol">{p.platform === "supabase" ? <Database/> : p.platform === "vercel" ? <Cloud/> : p.platform === "github" ? <Github/> : <Code2/>}</div><div className="project-info"><b>{p.project_name}</b><span>{p.platform} · {p.notes ?? p.external_ref ?? "Aucune note"}</span></div><div className="project-meta"><small>{p.environment}</small><Status tone={p.connection_status === "connected" ? "good" : p.connection_status === "degraded" ? "warn" : "muted"}>{p.connection_status}</Status></div>{p.dashboard_url && <ProviderLink href={p.dashboard_url}>Console</ProviderLink>}</article>)}{!loading && filteredProjects.length === 0 && <div className="empty-state"><b>Aucun projet correspondant</b><span>Le registre ne contient aucun résultat pour cette recherche.</span></div>}</div></div>}
+
+          {active === "aero" && <div className="panel project-panel">
+            <div className="panel-heading"><div><h3>Connecté au backend Aéro Service TEST</h3><p>Source : tables opérationnelles existantes. Aucune écriture n’est effectuée depuis cette page.</p></div><Status tone="good">Lecture réelle</Status></div>
+            <div className="section-title"><div><h2>Inventaire opérationnel</h2><p>{inventory ? "Données chargées depuis Supabase TEST." : "Charge les données réelles pour afficher l’état des modules."}</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger les opérations"} <RefreshCw size={15}/></button></div>
+            {inventory && <>
+              <div className="stats-grid">
+                <article className="stat-card"><div className="stat-top"><span>Pointages journaliers</span><ClipboardList size={18}/></div><strong>{inventory.daily_attendance.length}</strong><small>Enregistrements chargés · jusqu’à 1 000</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Séances de cours</span><Blocks size={18}/></div><strong>{inventory.course_sessions.length}</strong><small>Historique des séances · jusqu’à 500</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Demandes QR en attente</span><Activity size={18}/></div><strong>{inventory.qr_requests.filter((x:any)=>["pending","submitted","requested"].includes(String(x.status).toLowerCase())).length}</strong><small>Sur {inventory.qr_requests.length} demandes chargées</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Bornes actives</span><LockKeyhole size={18}/></div><strong>{inventory.kiosk_devices.filter((x:any)=>!x.revoked_at).length}</strong><small>{inventory.kiosk_devices.length} appareil(s) recensé(s)</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Pénalités ouvertes</span><Activity size={18}/></div><strong>{inventory.penalties.filter((x:any)=>!["paid","cancelled","waived","closed"].includes(String(x.status).toLowerCase())).length}</strong><small>Sur {inventory.penalties.length} pénalités chargées</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Paiements à valider</span><ShieldCheck size={18}/></div><strong>{inventory.payments.filter((x:any)=>["pending","submitted","received"].includes(String(x.status).toLowerCase()) && !x.validated_at).length}</strong><small>Sur {inventory.payments.length} paiements chargés</small></article>
+              </div>
+              <div className="lower-grid">
+                <article className="panel"><div className="panel-heading"><div><h3>Demandes QR</h3><p>Dernières demandes et motifs de rejet éventuels</p></div><span className="count-pill">{inventory.qr_requests.length}</span></div>
+                  {inventory.qr_requests.slice(0,12).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{new Date(x.requested_at).toLocaleString("fr-FR")} · {x.rejection_reason ?? "Aucun motif de rejet enregistré"}</small></div><Status tone={String(x.status).toLowerCase()==="approved"?"good":String(x.status).toLowerCase()==="rejected"?"warn":"muted"}>{x.status}</Status></div>)}
+                  {!inventory.qr_requests.length && <div className="empty-state">Aucune demande QR chargée.</div>}
+                </article>
+                <article className="panel"><div className="panel-heading"><div><h3>État des bornes</h3><p>Appareils enregistrés · aucun jeton exposé</p></div><span className="count-pill">{inventory.kiosk_devices.length}</span></div>
+                  {inventory.kiosk_devices.map((x:any)=><div className="audit-row" key={x.id}><div><b>{x.name}</b><small>Activation : {x.activated_at ? new Date(x.activated_at).toLocaleString("fr-FR") : "—"} · Dernière utilisation : {x.last_used_at ? new Date(x.last_used_at).toLocaleString("fr-FR") : "—"}</small></div><Status tone={x.revoked_at?"warn":"good"}>{x.revoked_at?"Révoquée":"Active"}</Status></div>)}
+                  {!inventory.kiosk_devices.length && <div className="empty-state">Aucun appareil de borne recensé.</div>}
+                </article>
+              </div>
+              <div className="lower-grid">
+                <article className="panel"><div className="panel-heading"><div><h3>Pointages récents</h3><p>Statut et heure d’arrivée depuis la table journalière</p></div><span className="count-pill">{inventory.daily_attendance.length}</span></div>
+                  {inventory.daily_attendance.slice(0,15).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{x.local_date} · {x.arrived_at ? new Date(x.arrived_at).toLocaleTimeString("fr-FR") : "Pas d’heure d’arrivée"} · {x.minutes_after_cutoff ?? 0} min après limite</small></div><Status tone={String(x.status).toLowerCase().includes("present")?"good":String(x.status).toLowerCase().includes("late")||String(x.status).toLowerCase().includes("retard")?"warn":"muted"}>{x.status}</Status></div>)}
+                  {!inventory.daily_attendance.length && <div className="empty-state">Aucun pointage chargé.</div>}
+                </article>
+                <article className="panel"><div className="panel-heading"><div><h3>Jours d’ouverture</h3><p>Historique d’ouverture et de fermeture</p></div><span className="count-pill">{inventory.operating_days.length}</span></div>
+                  {inventory.operating_days.slice(0,15).map((x:any)=><div className="audit-row" key={x.business_date}><div><b>{x.business_date}</b><small>Ouverture : {x.opened_at ? new Date(x.opened_at).toLocaleString("fr-FR") : "—"} · Fermeture : {x.closed_at ? new Date(x.closed_at).toLocaleString("fr-FR") : "—"}</small></div><Status tone={String(x.status).toLowerCase()==="open"?"good":"muted"}>{x.status}</Status></div>)}
+                  {!inventory.operating_days.length && <div className="empty-state">Aucun jour d’ouverture chargé.</div>}
+                </article>
+              </div>
+              <div className="section-title"><div><h2>Autres données reliées</h2><p>Compteurs des données de formation, régularisation et finances.</p></div></div>
+              <div className="security-list">
+                <div><span>Présences par séance</span><b>{inventory.session_attendance.length}</b></div>
+                <div><span>Planning hebdomadaire</span><b>{inventory.weekly_schedule.length}</b></div>
+                <div><span>Événements hors ligne à examiner</span><b>{inventory.offline_events.filter((x:any)=>!["approved","rejected","synced"].includes(String(x.review_status).toLowerCase())).length}</b></div>
+                <div><span>Justifications d’absence</span><b>{inventory.justifications.length}</b></div>
+                <div><span>Règles de pénalité actives</span><b>{inventory.penalty_rules.filter((x:any)=>x.active).length}</b></div>
+                <div><span>Paiements avec reçu</span><b>{inventory.payments.filter((x:any)=>Boolean(x.receipt_number)).length}</b></div>
+              </div>
+            </>}
+          </div>}
 
           {active === "commands" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Commandes propriétaires · TEST uniquement</h3><p>Les données sont lues depuis le projet TEST. Aucune connexion à Aéro Service PROD.</p></div><Status tone="good">2 corrections atomiques actives en TEST</Status></div>
