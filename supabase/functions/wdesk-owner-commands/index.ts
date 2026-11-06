@@ -67,6 +67,102 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
+  if (body.action === "student_assignment_repair") {
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const targetId = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const formationId = typeof body.formation_id === "string" ? body.formation_id.trim() : "";
+    const groupId = body.group_id === null || body.group_id === "" ? null : typeof body.group_id === "string" ? body.group_id.trim() : undefined;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!requestId || requestId.length > 100 || !uuidPattern.test(targetId) || !uuidPattern.test(formationId) ||
+        groupId === undefined || (groupId !== null && !uuidPattern.test(groupId)) ||
+        !reason || reason.length < 8 || reason.length > 500)
+      return json(400, { error: "student_formation_group_and_reason_required" });
+    if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
+
+    const { data: priorEvent } = await db.schema("wdesk_control").from("audit_events")
+      .select("id").eq("request_id", requestId).maybeSingle();
+    if (priorEvent) return json(409, { error: "request_already_processed" });
+
+    const { data: student, error: studentReadError } = await db.from("students")
+      .select("id,formation_id,group_id,student_number").eq("id", targetId).maybeSingle();
+    if (studentReadError || !student) return json(404, { error: "student_record_not_found" });
+
+    const { data: profile, error: profileReadError } = await db.from("profiles")
+      .select("id,status,display_name,email").eq("id", targetId).maybeSingle();
+    if (profileReadError || !profile) return json(404, { error: "student_profile_not_found" });
+    if (profile.status !== "active") return json(409, { error: "student_profile_not_active" });
+
+    const { data: formation, error: formationError } = await db.from("formations")
+      .select("id,name,status").eq("id", formationId).maybeSingle();
+    if (formationError || !formation) return json(404, { error: "formation_not_found" });
+    if (formation.status !== "active") return json(409, { error: "formation_not_active" });
+
+    let group: { id: string; name: string; formation_id: string; status: string } | null = null;
+    if (groupId) {
+      const { data, error } = await db.from("groups").select("id,name,formation_id,status")
+        .eq("id", groupId).maybeSingle();
+      if (error || !data) return json(404, { error: "group_not_found" });
+      if (data.status !== "active" || data.formation_id !== formationId)
+        return json(409, { error: "group_does_not_belong_to_active_formation" });
+      group = data;
+    }
+
+    const { data: registration, error: registrationError } = await db.from("registrations")
+      .select("id,registration_number,formation_id,group_id,status")
+      .eq("person_id", targetId).eq("status", "approved")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (registrationError) return json(503, { error: "registration_lookup_failed" });
+    if (!registration) return json(409, { error: "approved_registration_required_before_assignment_repair" });
+
+    const before = {
+      student: { formation_id: student.formation_id, group_id: student.group_id },
+      registration: { id: registration.id, registration_number: registration.registration_number,
+        formation_id: registration.formation_id, group_id: registration.group_id }
+    };
+
+    const { data: studentAfter, error: studentUpdateError } = await db.from("students")
+      .update({ formation_id: formationId, group_id: groupId }).eq("id", targetId)
+      .select("id,formation_id,group_id,student_number").maybeSingle();
+    if (studentUpdateError || !studentAfter) return json(409, { error: "student_assignment_update_failed" });
+
+    const { data: registrationAfter, error: registrationUpdateError } = await db.from("registrations")
+      .update({ formation_id: formationId, group_id: groupId }).eq("id", registration.id)
+      .select("id,registration_number,formation_id,group_id,status").maybeSingle();
+    if (registrationUpdateError || !registrationAfter) {
+      await db.from("students").update({ formation_id: student.formation_id, group_id: student.group_id }).eq("id", targetId);
+      return json(503, { error: "registration_update_failed_student_assignment_rolled_back" });
+    }
+
+    const { error: auditError } = await db.schema("wdesk_control").from("audit_events").insert({
+      actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
+      action: "student.formation_group_repaired", target_type: "student", target_ref: targetId,
+      environment: "test", outcome: "success", request_id: requestId,
+      details: {
+        reason, registration_number: registration.registration_number,
+        before, after: {
+          student: { formation_id: studentAfter.formation_id, group_id: studentAfter.group_id },
+          registration: { formation_id: registrationAfter.formation_id, group_id: registrationAfter.group_id }
+        },
+        selected_formation: formation.name, selected_group: group?.name ?? null
+      }
+    });
+    if (auditError) {
+      await db.from("registrations").update({ formation_id: registration.formation_id, group_id: registration.group_id }).eq("id", registration.id);
+      await db.from("students").update({ formation_id: student.formation_id, group_id: student.group_id }).eq("id", targetId);
+      return json(503, { error: "audit_failed_assignment_rolled_back" });
+    }
+    return json(200, {
+      ok: true, action: "student.formation_group_repaired", request_id: requestId,
+      person: { id: profile.id, display_name: profile.display_name, email: profile.email },
+      formation, group, before,
+      after: {
+        student: { formation_id: studentAfter.formation_id, group_id: studentAfter.group_id },
+        registration: { formation_id: registrationAfter.formation_id, group_id: registrationAfter.group_id }
+      }
+    });
+  }
+
   if (body.action !== "profile_display_name_update") return json(400, { error: "unsupported_action" });
 
   const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
