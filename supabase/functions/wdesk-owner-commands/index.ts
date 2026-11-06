@@ -92,7 +92,7 @@ Deno.serve(async (req: Request) => {
         auth_users: (authUsersResult.data?.users ?? []).map((u: any) => ({ id: u.id, email: u.email, phone: u.phone, email_confirmed_at: u.email_confirmed_at, phone_confirmed_at: u.phone_confirmed_at, last_sign_in_at: u.last_sign_in_at, banned_until: u.banned_until, created_at: u.created_at }))
       },
       capabilities: {
-        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true, kiosk_device_revoke: true, payment_validate: true,
+        inventory_read: true, people_lookup: true, registration_lookup: true, operational_inventory_read: true, qr_checkin_review: true, absence_justification_review: true, registration_review: true, kiosk_device_revoke: true, payment_validate: true,
         profile_display_name_update: true, student_assignment_repair: true, transactional_operations: true, arbitrary_sql: false, hard_delete: false
       },
     });
@@ -222,6 +222,116 @@ Deno.serve(async (req: Request) => {
     return json(200, { ok: true, action: "kiosk.device_revoked", result, before, after, request_id: requestId });
   }
 
+  if (body.action === "registration_review") {
+    const registrationId = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const decision = body.decision === "approved" || body.decision === "rejected" ? body.decision : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(registrationId) || !requestId || requestId.length > 100 || !decision || reason.length < 8 || reason.length > 500)
+      return json(400, { error: "registration_decision_reason_required" });
+    if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
+
+    const { data: before, error: beforeError } = await db.from("registrations")
+      .select("id,registration_number,person_id,formation_id,group_id,registration_date,status,review_comment,created_at")
+      .eq("id", registrationId).maybeSingle();
+    if (beforeError) return json(503, { error: "registration_lookup_failed" });
+    if (!before) return json(404, { error: "registration_not_found" });
+    if (before.status !== "pending") return json(409, { error: "registration_not_pending" });
+
+    const { data: auditStart, error: auditStartError } = await db.schema("wdesk_control").from("audit_events")
+      .insert({
+        actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
+        action: "registration.reviewed", target_type: "registration", target_ref: registrationId,
+        environment: "test", outcome: "pending", request_id: requestId,
+        details: { reason, decision, before: { status: before.status, person_id: before.person_id, formation_id: before.formation_id, group_id: before.group_id }, stage: "review_started" },
+      }).select("id").single();
+    if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
+    if (auditStartError || !auditStart) return json(503, { error: "audit_start_failed_operation_not_started" });
+
+    const { data: result, error: reviewError } = await userDb.rpc("review_registration_and_activate_student", {
+      p_registration_id: registrationId, p_decision: decision, p_comment: reason,
+    });
+    if (reviewError) {
+      await db.schema("wdesk_control").from("audit_events").update({
+        outcome: "failure",
+        details: { reason, decision, before: { status: before.status }, failure_code: reviewError.code ?? "review_failed" },
+      }).eq("id", auditStart.id);
+      const message = reviewError.message ?? "";
+      if (message.includes("REGISTRATION_REVIEW_FORBIDDEN")) return json(403, { error: "aero_director_or_secretariat_role_required" });
+      if (message.includes("REGISTRATION_NOT_FOUND")) return json(404, { error: "registration_not_found" });
+      if (message.includes("INVALID_REGISTRATION_DECISION")) return json(400, { error: "invalid_registration_decision" });
+      if (message.includes("ACTIVE_FORMATION_REQUIRED")) return json(409, { error: "active_formation_required" });
+      if (message.includes("LEARNER_PROFILE_NOT_FOUND")) return json(409, { error: "learner_profile_not_found" });
+      if (message.includes("STUDENT_ROLE_NOT_CONFIGURED")) return json(503, { error: "student_role_not_configured" });
+      return json(409, { error: "registration_review_rejected_by_aero_service_rules" });
+    }
+
+    const { data: after } = await db.from("registrations")
+      .select("id,status,review_comment,person_id,formation_id,group_id")
+      .eq("id", registrationId).maybeSingle();
+    const { error: auditFinishError } = await db.schema("wdesk_control").from("audit_events").update({
+      outcome: "success",
+      details: { reason, decision, before, after: after ?? { status: decision }, result },
+    }).eq("id", auditStart.id);
+    if (auditFinishError) return json(200, { ok: true, action: "registration.reviewed", result, audit_warning: "operation_completed_audit_update_failed" });
+    return json(200, { ok: true, action: "registration.reviewed", before, after, result, request_id: requestId });
+  }
+
+  if (body.action === "absence_justification_review") {
+    const justificationId = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const decision = body.decision === "approved" || body.decision === "rejected" ? body.decision : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(justificationId) || !requestId || requestId.length > 100 || !decision || reason.length < 8 || reason.length > 500)
+      return json(400, { error: "absence_justification_decision_reason_required" });
+    if (body.confirmation !== "CONFIRMER") return json(400, { error: "explicit_confirmation_required" });
+
+    const { data: before, error: beforeError } = await db.from("absence_justifications")
+      .select("id,attendance_id,person_id,reason_type,reason,submitted_at,status,reviewed_by,reviewed_at,review_comment")
+      .eq("id", justificationId).maybeSingle();
+    if (beforeError) return json(503, { error: "absence_justification_lookup_failed" });
+    if (!before) return json(404, { error: "absence_justification_not_found" });
+    if (before.status !== "pending") return json(409, { error: "absence_justification_already_reviewed" });
+
+    const { data: auditStart, error: auditStartError } = await db.schema("wdesk_control").from("audit_events")
+      .insert({
+        actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
+        action: "absence.justification_reviewed", target_type: "absence_justification", target_ref: justificationId,
+        environment: "test", outcome: "pending", request_id: requestId,
+        details: { reason, decision, before: { status: before.status, attendance_id: before.attendance_id }, stage: "review_started" },
+      }).select("id").single();
+    if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
+    if (auditStartError || !auditStart) return json(503, { error: "audit_start_failed_operation_not_started" });
+
+    const { data: result, error: reviewError } = await userDb.rpc("review_absence_justification", {
+      p_justification_id: justificationId, p_decision: decision, p_comment: reason,
+    });
+    if (reviewError) {
+      await db.schema("wdesk_control").from("audit_events").update({
+        outcome: "failure",
+        details: { reason, decision, before: { status: before.status }, failure_code: reviewError.code ?? "review_failed" },
+      }).eq("id", auditStart.id);
+      const message = reviewError.message ?? "";
+      if (message.includes("ADMIN_REVIEW_REQUIRED")) return json(403, { error: "aero_director_or_secretariat_role_required" });
+      if (message.includes("JUSTIFICATION_NOT_FOUND")) return json(404, { error: "absence_justification_not_found" });
+      if (message.includes("JUSTIFICATION_ALREADY_REVIEWED")) return json(409, { error: "absence_justification_already_reviewed" });
+      if (message.includes("INVALID_JUSTIFICATION_DECISION")) return json(400, { error: "invalid_absence_justification_decision" });
+      return json(409, { error: "absence_justification_review_rejected_by_aero_service_rules" });
+    }
+
+    const { data: after } = await db.from("absence_justifications")
+      .select("id,attendance_id,person_id,status,reviewed_by,reviewed_at,review_comment")
+      .eq("id", justificationId).maybeSingle();
+    const { error: auditFinishError } = await db.schema("wdesk_control").from("audit_events").update({
+      outcome: "success",
+      details: { reason, decision, before, after: after ?? { status: decision }, result },
+    }).eq("id", auditStart.id);
+    if (auditFinishError) return json(200, { ok: true, action: "absence.justification_reviewed", result, audit_warning: "operation_completed_audit_update_failed" });
+    return json(200, { ok: true, action: "absence.justification_reviewed", before, after, result, request_id: requestId });
+  }
+
   if (body.action === "qr_checkin_review") {
     const requestTarget = typeof body.target_id === "string" ? body.target_id.trim() : "";
     const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
@@ -246,6 +356,7 @@ Deno.serve(async (req: Request) => {
         environment: "test", outcome: "pending", request_id: requestId,
         details: { reason, decision, before: { status: before.status }, stage: "review_started" },
       }).select("id").single();
+    if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
     if (auditStartError || !auditStart) return json(503, { error: "audit_start_failed_operation_not_started" });
 
     const { data: result, error: reviewError } = await userDb.rpc("review_qr_checkin_request", {
