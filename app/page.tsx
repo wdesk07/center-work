@@ -426,6 +426,20 @@ export default function Home() {
               <div className="audit-list">{inventory.penalties.map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{x.penalty_type ?? "Pénalité"} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.description ?? "Sans description"}</small></div><Status tone={x.status==="paid"?"good":x.status==="pending"?"warn":"muted"}>{x.status}</Status></div>)}</div>
               <div className="section-title"><div><h2>Paiements et reçus</h2><p>État de validation retourné par Aéro Service TEST.</p></div></div>
               <div className="audit-list">{inventory.payments.map((x:any)=><div className="audit-row" key={x.id}><div><b>{x.receipt_number ?? "Paiement sans reçu"}</b><small>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.payer_name ?? x.person_id} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.payment_type ?? "Paiement"}</small></div><Status tone={x.status==="validated"?"good":"warn"}>{x.status}</Status></div>)}</div>
+                <form className="module-panel" onSubmit={submitPaymentValidation}>
+                  <h3>Valider un paiement en attente</h3>
+                  <p>Validation définitive : génère le reçu. Pour un paiement de pénalité, Aéro Service peut également solder la pénalité, régulariser le retard et notifier l’apprenant. Un paiement validé devient immuable.</p>
+                  <label className="command-label">Paiement en attente</label>
+                  <select value={paymentTarget} onChange={e=>setPaymentTarget(e.target.value)} required>
+                    <option value="">Choisir un paiement…</option>
+                    {(inventory.payments ?? []).filter((x:any)=>x.status==="pending").map((x:any)=><option key={x.id} value={x.id}>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.payer_name ?? x.person_id} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.id}</option>)}
+                  </select>
+                  <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
+                  <textarea value={paymentReason} onChange={e=>setPaymentReason(e.target.value)} minLength={8} maxLength={500} required />
+                  <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
+                  <input value={paymentConfirmation} onChange={e=>setPaymentConfirmation(e.target.value)} placeholder="CONFIRMER" required />
+                  <button className="primary-button" type="submit" disabled={commandBusy || !paymentTarget}>{commandBusy ? "Validation…" : "Confirmer la validation définitive"} <ShieldCheck size={16}/></button>
+                </form>
               <div className="section-title"><div><h2>Règles de pénalité</h2><p>Consultation uniquement : aucune règle n’est modifiée sans contrôle métier dédié.</p></div></div>
               <div className="audit-list">{inventory.penalty_rules.map((x:any)=><div className="audit-row" key={x.id}><div><b>{x.penalty_type} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA</b><small>{x.description ?? "—"} · {x.min_delay_minutes ?? 0} à {x.max_delay_minutes ?? "∞"} minute(s) · priorité {x.priority}</small></div><Status tone={x.active?"good":"muted"}>{x.active?"Active":"Inactive"}</Status></div>)}</div>
             </> : <div className="empty-state">Charge l’inventaire TEST.</div>}
@@ -529,20 +543,7 @@ export default function Home() {
                 <article className="panel"><div className="panel-heading"><div><h3>Pénalités et paiements</h3><p>Dernières opérations financières TEST</p></div><span className="count-pill">{inventory.penalties.length + inventory.payments.length}</span></div>
                   {inventory.penalties.slice(0,8).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>Pénalité · {x.penalty_type} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.description ?? "—"}</small></div><Status tone={x.status==="paid"?"good":x.status==="pending"?"warn":"muted"}>{x.status}</Status></div>)}
                   {inventory.payments.slice(0,8).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.payer_name ?? x.person_id}</b><small>Paiement · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.receipt_number ?? "Sans reçu"}</small></div><Status tone={x.status==="validated"?"good":"warn"}>{x.status}</Status></div>)}
-                  <form className="module-panel" onSubmit={submitPaymentValidation}>
-                    <h3>Valider un paiement en attente</h3>
-                    <p>Validation définitive : génère le reçu. Pour un paiement de pénalité, Aéro Service peut également solder la pénalité, régulariser le retard et notifier l’apprenant. Un paiement validé devient immuable.</p>
-                    <label className="command-label">Paiement en attente</label>
-                    <select value={paymentTarget} onChange={e=>setPaymentTarget(e.target.value)} required>
-                      <option value="">Choisir un paiement…</option>
-                      {(inventory.payments ?? []).filter((x:any)=>x.status==="pending").map((x:any)=><option key={x.id} value={x.id}>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.payer_name ?? x.person_id} · {Number(x.amount_fcfa).toLocaleString("fr-FR")} FCFA · {x.id}</option>)}
-                    </select>
-                    <label className="command-label">Motif obligatoire (8 caractères minimum)</label>
-                    <textarea value={paymentReason} onChange={e=>setPaymentReason(e.target.value)} minLength={8} maxLength={500} required />
-                    <label className="command-label">Confirmation explicite : saisir CONFIRMER</label>
-                    <input value={paymentConfirmation} onChange={e=>setPaymentConfirmation(e.target.value)} placeholder="CONFIRMER" required />
-                    <button className="primary-button" type="submit" disabled={commandBusy || !paymentTarget}>{commandBusy ? "Validation…" : "Confirmer la validation définitive"} <ShieldCheck size={16}/></button>
-                  </form>
+
                   {!inventory.penalties.length && !inventory.payments.length && <div className="empty-state">Aucune opération financière chargée.</div>}
                 </article>
               </div>
