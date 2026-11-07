@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
       return json(error.code === "23505" ? 409 : 503, { error: error.code === "23505" ? "duplicate_or_conflicting_record" : "owner_mutation_failed" });
     }
     const { error: finishError } = await db.schema("wdesk_control").from("audit_events").update({ outcome: "success", details: { reason, before, after } }).eq("id", audit.id);
-    return json(200, { ok: true, action, before, after, request_id: requestId, ...(finishError ? { audit_warning: "operation_completed_audit_update_failed" } : (after && after.attendance_event_error ? { audit_warning: "attendance_corrected_but_attendance_event_insert_failed" } : {})) });
+    return json(200, { ok: true, action, before, after, request_id: requestId, ...(finishError ? { audit_warning: "operation_completed_audit_update_failed" } : (after && after.attendance_event_error ? { audit_warning: "attendance_corrected_but_attendance_event_insert_failed" } : (after && after.profile_warning ? { audit_warning: "account_invited_but_profile_creation_needs_review" } : {}))) });
   };
 
   if (body.action === "formation_upsert") {
@@ -266,8 +266,17 @@ Deno.serve(async (req: Request) => {
     if (users.error) return json(503, { error: "auth_user_lookup_failed" });
     if (users.data.users.some((u: any) => String(u.email ?? "").toLowerCase() === email)) return json(409, { error: "auth_user_already_exists" });
     const redirectTo = (Deno.env.get("CONTROL_CENTER_ORIGIN") ?? "https://center-work.vercel.app") + "/auth/callback";
-    return auditWrite("account.invited", "auth_user", email, reason, requestId, null,
-      () => db.auth.admin.inviteUserByEmail(email, { data: { display_name: displayName }, redirectTo }));
+    return auditWrite("account.invited", "auth_user", email, reason, requestId, null, async () => {
+      const invited = await db.auth.admin.inviteUserByEmail(email, { data: { display_name: displayName }, redirectTo });
+      if (invited.error || !invited.data.user) return { data: null, error: invited.error ?? { code: "invite_failed" } };
+      const profile = await db.from("profiles").insert({
+        id: invited.data.user.id, display_name: displayName, email, status: "active",
+      }).select("id,display_name,email,status").single();
+      return {
+        data: { auth_user_id: invited.data.user.id, email, profile: profile.data, profile_warning: profile.error?.code ?? null },
+        error: null,
+      };
+    });
   }
 
   if (body.action === "account_status") {
