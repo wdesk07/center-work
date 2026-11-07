@@ -1,12 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const READS = {
+const buildReads = (production: SupabaseClient) => ({
   profiles: () => production.from("profiles").select("id,public_id,first_name,last_name,display_name,phone,whatsapp,email,status,created_at,updated_at").order("display_name").limit(500),
   students: () => production.from("students").select("id,student_number,formation_id,group_id,enrollment_date,education_level").limit(500),
   staff: () => production.from("staff").select("id,staff_number,department,position,hire_date,status").limit(250),
@@ -34,7 +34,7 @@ const READS = {
   course_suspensions: () => production.from("course_suspensions").select("id,formation_id,starts_on,ends_on,reason,created_by,created_at,revoked_at,revoked_by").order("created_at",{ascending:false}).limit(250),
   system_settings: () => production.from("system_settings").select("key,value,description,updated_at").order("key").limit(250),
   audit_logs: () => production.from("audit_logs").select("id,actor_id,action,module,entity_type,entity_id,old_values,new_values,created_at,visibility").order("created_at",{ascending:false}).limit(1000),
-};
+});
 
 async function authorizeOwner(accessToken: string, url: string, key: string) {
   const response = await fetch(`${url}/functions/v1/wdesk-owner-commands`, {
@@ -80,7 +80,8 @@ export async function GET() {
     global: { headers: { "X-WDESK-Environment": "production-read-only" } },
   });
 
-  const entries = await Promise.all(Object.entries(READS).map(async ([name, query]) => {
+  const reads = buildReads(production);
+  const entries = await Promise.all(Object.entries(reads).map(async ([name, query]) => {
     const result = await query();
     return [name, result] as const;
   }));
