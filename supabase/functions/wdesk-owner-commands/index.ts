@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
     if (duplicate) return json(409, { error: "request_already_processed" });
     const { data: audit, error: auditError } = await db.schema("wdesk_control").from("audit_events").insert({
       actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(), action, target_type: targetType,
-      target_ref: targetRef, environment: "test", outcome: "pending", request_id: requestId,
+      target_ref: targetRef, environment: "test", outcome: "recorded", request_id: requestId,
       details: { reason, before, stage: "mutation_started" },
     }).select("id").single();
     if (auditError || !audit) return json(503, { error: "audit_start_failed_operation_not_started" });
@@ -318,7 +318,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
         action: "payment.validated", target_type: "payment", target_ref: paymentId,
-        environment: "test", outcome: "pending", request_id: requestId,
+        environment: "test", outcome: "recorded", request_id: requestId,
         details: { reason, before: { status: before.status, amount_fcfa: before.amount_fcfa, penalty_id: before.penalty_id }, stage: "validation_started" },
       }).select("id").single();
     if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
@@ -382,7 +382,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
         action: "kiosk.device_revoked", target_type: "presence_kiosk_device", target_ref: deviceId,
-        environment: "test", outcome: "pending", request_id: requestId,
+        environment: "test", outcome: "recorded", request_id: requestId,
         details: { reason, before: { name: before.name, revoked_at: before.revoked_at }, stage: "revocation_started" },
       }).select("id").single();
     if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
@@ -430,7 +430,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
         action: "registration.reviewed", target_type: "registration", target_ref: registrationId,
-        environment: "test", outcome: "pending", request_id: requestId,
+        environment: "test", outcome: "recorded", request_id: requestId,
         details: { reason, decision, before: { status: before.status, person_id: before.person_id, formation_id: before.formation_id, group_id: before.group_id }, stage: "review_started" },
       }).select("id").single();
     if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
@@ -486,7 +486,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
         action: "absence.justification_reviewed", target_type: "absence_justification", target_ref: justificationId,
-        environment: "test", outcome: "pending", request_id: requestId,
+        environment: "test", outcome: "recorded", request_id: requestId,
         details: { reason, decision, before: { status: before.status, attendance_id: before.attendance_id }, stage: "review_started" },
       }).select("id").single();
     if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
@@ -540,7 +540,7 @@ Deno.serve(async (req: Request) => {
       .insert({
         actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(),
         action: "qr.request_reviewed", target_type: "qr_checkin_request", target_ref: requestTarget,
-        environment: "test", outcome: "pending", request_id: requestId,
+        environment: "test", outcome: "recorded", request_id: requestId,
         details: { reason, decision, before: { status: before.status }, stage: "review_started" },
       }).select("id").single();
     if (auditStartError?.code === "23505") return json(409, { error: "request_already_processed" });
