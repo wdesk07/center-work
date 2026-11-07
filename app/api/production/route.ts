@@ -53,6 +53,9 @@ export async function GET() {
   const productionUrl = process.env.AERO_PRODUCTION_SUPABASE_URL;
   const productionKey = process.env.AERO_PRODUCTION_SUPABASE_SERVICE_ROLE_KEY;
 
+  if (wdeskUrl && !wdeskUrl.includes("nuijzdqnhjzcnqpfqvvl.supabase.co")) {
+    return NextResponse.json({ error: "wdesk_test_project_mismatch", environment: "production", writable: false }, { status: 503 });
+  }
   if (!wdeskUrl || !wdeskKey || !productionUrl || !productionKey) {
     return NextResponse.json({ error: "production_readonly_not_configured", environment: "production", writable: false }, { status: 503 });
   }
