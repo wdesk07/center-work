@@ -32,7 +32,7 @@ const buildReads = (production: SupabaseClient) => ({
   qr_requests: () => production.from("qr_checkin_requests").select("id,person_id,session_id,requested_at,status,reviewed_by,reviewed_at,attendance_id,penalty_id,rejection_reason").order("requested_at",{ascending:false}).limit(500),
   operating_days: () => production.from("operating_days").select("business_date,status,opened_at,opened_by,closed_at,closed_by,updated_at").order("business_date",{ascending:false}).limit(100),
   course_suspensions: () => production.from("course_suspensions").select("id,formation_id,starts_on,ends_on,reason,created_by,created_at,revoked_at,revoked_by").order("created_at",{ascending:false}).limit(250),
-  system_settings: () => production.from("system_settings").select("key,value,description,updated_at").order("key").limit(250),
+  system_settings: () => production.from("system_settings").select("key,description,updated_at").order("key").limit(250),
   audit_logs: () => production.from("audit_logs").select("id,actor_id,action,module,entity_type,entity_id,old_values,new_values,created_at,visibility").order("created_at",{ascending:false}).limit(1000),
 });
 
