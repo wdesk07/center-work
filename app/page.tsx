@@ -8,7 +8,7 @@ import {
   Search, Settings, ShieldCheck, Users, X, RefreshCw, ExternalLink, ClipboardList
 } from "lucide-react";
 
-type ModuleKey = "overview" | "aero" | "diagnostics" | "projects" | "ownerOps" | "commands" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
+type ModuleKey = "overview" | "production" | "aero" | "diagnostics" | "projects" | "ownerOps" | "commands" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
 type Project = { id?: string; platform: string; project_name: string; environment: string; external_ref?: string | null; dashboard_url?: string | null; connection_status: string; notes?: string | null; updated_at?: string };
 type AuditEvent = { id: number; occurred_at: string; actor_email?: string; action: string; target_type?: string; target_ref?: string; environment: string; outcome: string; details?: Record<string, unknown> };
 type DiagnosticCheck = { component: string; check_name: string; count: number; status: string; explanation: string };
@@ -18,6 +18,7 @@ type Dashboard = { owner?: { email: string; display_name: string; role: string }
 
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
   { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
+  { key: "production", label: "Aéro Service PRODUCTION", icon: Database, group: "AÉRO SERVICE" },
   { key: "aero", label: "Borne de présence", icon: ClipboardList, group: "AÉRO SERVICE" },
   { key: "diagnostics", label: "Présences", icon: Activity, group: "AÉRO SERVICE" },
   { key: "projects", label: "Formations et groupes", icon: Blocks, group: "AÉRO SERVICE" },
@@ -33,6 +34,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
+  production: { title: "Aéro Service PRODUCTION · lecture seule", intro: "Consultation séparée des données réelles de production. Aucun formulaire ni aucune commande de modification n’est disponible dans cet espace." },
   aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes de contrôle QR depuis Aéro Service TEST." },
   diagnostics: { title: "Présences", intro: "Suivi des pointages journaliers et par séance, retards, régularisations, justifications et anomalies de synchronisation." },
   projects: { title: "Formations et groupes", intro: "Catalogue des formations, groupes, inscriptions et associations apprenants depuis la base TEST." },
@@ -70,6 +72,9 @@ export default function Home() {
   } | null>(null);
   const [personSearch, setPersonSearch] = useState("");
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [productionInventory, setProductionInventory] = useState<Record<string, any[]> | null>(null);
+  const [productionLoading, setProductionLoading] = useState(false);
+  const [productionError, setProductionError] = useState("");
   const [selectedProfile, setSelectedProfile] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [changeReason, setChangeReason] = useState("");
@@ -116,6 +121,25 @@ export default function Home() {
   }
 
   useEffect(() => { void refresh(); }, []);
+
+  async function loadProductionInventory() {
+    setProductionLoading(true);
+    setProductionError("");
+    try {
+      const response = await fetch("/api/production", { method: "GET", cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error === "production_readonly_not_configured"
+        ? "Connexion PRODUCTION non configurée : les deux variables serveur AERO_PRODUCTION_SUPABASE_URL et AERO_PRODUCTION_SUPABASE_SERVICE_ROLE_KEY sont requises. Aucun accès TEST n’est utilisé comme remplacement."
+        : result.error ?? `Lecture PRODUCTION refusée (HTTP ${response.status}).`);
+      if (result.environment !== "production" || result.writable !== false || result.read_only !== true || result.project_ref !== "tsyhuuqtbcdpolhmmeri") {
+        throw new Error("Réponse refusée : l’environnement PRODUCTION n’a pas passé les contrôles d’identité et de lecture seule.");
+      }
+      setProductionInventory(result.inventory ?? {});
+    } catch (e) {
+      setProductionInventory(null);
+      setProductionError(e instanceof Error ? e.message : "Impossible de lire Aéro Service PRODUCTION.");
+    } finally { setProductionLoading(false); }
+  }
 
   async function loadCommandInventory(showNotice = true) {
     setInventoryLoading(true);
@@ -353,6 +377,7 @@ export default function Home() {
 
   function choose(key: ModuleKey) {
     setActive(key); setMobileOpen(false); setNotice("");
+    if (key === "production") { void loadProductionInventory(); return; }
     if (key !== "overview" && !inventory) void loadCommandInventory(false);
   }
 
@@ -407,6 +432,29 @@ export default function Home() {
               <article className="panel"><div className="panel-heading"><div><h3>État de sécurité</h3><p>État connu, sans masquer les éléments manquants</p></div><ShieldCheck size={19}/></div><div className="security-list"><div><span>Identité propriétaire</span><Status tone={data?.owner ? "good" : "warn"}>{data?.owner ? "Vérifiée" : "À vérifier"}</Status></div><div><span>Registre / audit</span><Status tone={data ? "good" : "warn"}>{data ? "API accessible" : "Indisponible"}</Status></div><div><span>Opérations fournisseur depuis l’interface</span><Status tone="warn">Pas encore activées</Status></div><div><span>Backend indépendant du TEST Aéro</span><Status tone="warn">À mettre en place</Status></div></div></article>
             </div>
           </>}
+
+          {active === "production" && <div className="panel project-panel">
+            <div className="panel-heading"><div><h3>Aéro Service · PRODUCTION</h3><p>Projet Supabase <b>tsyhuuqtbcdpolhmmeri</b> · données réelles · consultation uniquement.</p></div><Status tone="warn">LECTURE SEULE</Status></div>
+            <div className="notice"><ShieldCheck size={17}/>Environnement PRODUCTION isolé. Les actions de création, modification, suppression, validation, suspension et correction sont désactivées ici. Les commandes TEST restent dans leurs modules séparés.</div>
+            <div className="section-title"><div><h2>Inventaire de production</h2><p>Chargement direct via la route serveur protégée ; aucun basculement du client Supabase TEST.</p></div><button className="subtle-button" disabled={productionLoading} onClick={() => void loadProductionInventory()}>{productionLoading ? "Lecture…" : "Actualiser la production"} <RefreshCw size={15}/></button></div>
+            {productionLoading && <div className="empty-state">Lecture de l’inventaire PRODUCTION…</div>}
+            {productionError && <div className="notice"><Activity size={17}/>{productionError}</div>}
+            {productionInventory && <>
+              <div className="stats-grid">
+                {([["Profils","profiles"],["Apprenants","students"],["Personnel","staff"],["Formateurs","teachers"],["Formations","formations"],["Groupes","groups"],["Inscriptions","registrations"],["Pointages","attendance"],["Événements de présence","attendance_events"],["Séances de cours","course_sessions"],["Pénalités","penalties"],["Paiements","payments"]] as const).map(([label,key]) => <article className="stat-card" key={key}><div className="stat-top"><span>{label}</span><Database size={18}/></div><strong>{(productionInventory[key] ?? []).length}</strong><small>Enregistrements chargés · PRODUCTION</small></article>)}
+              </div>
+              <div className="section-title"><div><h2>Formations et groupes</h2><p>Référentiel réel de production.</p></div></div>
+              <div className="audit-list">{(productionInventory.formations ?? []).map((f:any)=><div className="audit-row" key={f.id}><div><b>{f.name}</b><small>{f.code ?? "Sans code"} · {f.duration ?? "Durée non précisée"} · {(productionInventory.groups ?? []).filter((g:any)=>g.formation_id===f.id).length} groupe(s)</small></div><Status tone={f.status==="active"?"good":"muted"}>{f.status ?? "État non précisé"}</Status></div>)}</div>
+              <div className="section-title"><div><h2>Pointages récents</h2><p>Table PRODUCTION : attendance (distincte de daily_attendance/session_attendance dans TEST).</p></div><span className="count-pill">{(productionInventory.attendance ?? []).length}</span></div>
+              <div className="audit-list">{(productionInventory.attendance ?? []).slice(0,30).map((a:any)=><div className="audit-row" key={a.id}><div><b>{(productionInventory.profiles ?? []).find((p:any)=>p.id===a.person_id)?.display_name ?? a.person_id}</b><small>{a.arrived_at ? new Date(a.arrived_at).toLocaleString("fr-FR") : "Heure d’arrivée non renseignée"} · prévu : {a.planned_at ? new Date(a.planned_at).toLocaleString("fr-FR") : "—"} · retard : {a.delay_minutes ?? 0} min</small><small>Type : {a.person_type ?? "—"} · source : {a.source ?? "—"} · anomalie : {a.anomaly_reason ?? "aucune signalée"}</small></div><Status tone={["present","on_time","regularized"].includes(String(a.status).toLowerCase())?"good":String(a.status).toLowerCase().includes("late")?"warn":"muted"}>{a.status}</Status></div>)}</div>
+              <div className="section-title"><div><h2>Appareils de borne</h2><p>Informations non secrètes uniquement ; aucun jeton ni secret appareil n’est exposé.</p></div></div>
+              <div className="audit-list">{(productionInventory.kiosk_devices ?? []).map((d:any)=><div className="audit-row" key={d.id}><div><b>{d.name ?? "Borne sans nom"}</b><small>Activée : {d.activated_at ? new Date(d.activated_at).toLocaleString("fr-FR") : "—"} · Dernière utilisation : {d.last_used_at ? new Date(d.last_used_at).toLocaleString("fr-FR") : "—"}</small></div><Status tone={d.revoked_at?"warn":"good"}>{d.revoked_at?"Révoquée":"Non révoquée"}</Status></div>)}</div>
+              <div className="section-title"><div><h2>Pénalités et paiements</h2><p>Consultation uniquement ; aucun paiement ne sera validé depuis cet écran.</p></div></div>
+              <div className="audit-list">{(productionInventory.penalties ?? []).slice(0,30).map((p:any)=><div className="audit-row" key={p.id}><div><b>{(productionInventory.profiles ?? []).find((x:any)=>x.id===p.person_id)?.display_name ?? p.person_id}</b><small>{p.penalty_type ?? "Pénalité"} · {Number(p.amount_fcfa ?? 0).toLocaleString("fr-FR")} FCFA · {p.description ?? "—"}</small></div><Status>{p.status}</Status></div>)}</div>
+              <div className="empty-state">Les données ci-dessus proviennent exclusivement de la base PRODUCTION. Les volumes affichés sont limités par la route serveur (pagination plafonnée) et ne constituent pas un export exhaustif.</div>
+            </>}
+            {!productionInventory && !productionLoading && !productionError && <div className="empty-state">Aucune donnée PRODUCTION chargée. Lance la lecture ci-dessus.</div>}
+          </div>}
 
           {active === "diagnostics" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Suivi central des présences · TEST</h3><p>Les mêmes identifiants de personne relient les pointages journaliers, les séances, les justifications et les dossiers.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser les présences <RefreshCw size={15}/></button></div>
