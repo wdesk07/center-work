@@ -53,7 +53,7 @@ export async function GET() {
   const productionUrl = process.env.AERO_PRODUCTION_SUPABASE_URL;
   const productionKey = process.env.AERO_PRODUCTION_SUPABASE_SERVICE_ROLE_KEY;
 
-  if (wdeskUrl && !wdeskUrl.includes("nuijzdqnhjzcnqpfqvvl.supabase.co")) {
+  if (wdeskUrl && new URL(wdeskUrl).hostname !== "nuijzdqnhjzcnqpfqvvl.supabase.co") {
     return NextResponse.json({ error: "wdesk_test_project_mismatch", environment: "production", writable: false }, { status: 503 });
   }
   if (!wdeskUrl || !wdeskKey || !productionUrl || !productionKey) {
@@ -74,7 +74,7 @@ export async function GET() {
   const isOwner = await authorizeOwner(accessToken, wdeskUrl, wdeskKey);
   if (!isOwner) return NextResponse.json({ error: "primary_owner_only" }, { status: 403 });
 
-  if (!productionUrl.startsWith("https://") || !productionUrl.includes("tsyhuuqtbcdpolhmmeri.supabase.co")) {
+  if (new URL(productionUrl).protocol !== "https:" || new URL(productionUrl).hostname !== "tsyhuuqtbcdpolhmmeri.supabase.co") {
     return NextResponse.json({ error: "production_project_mismatch", environment: "production", writable: false }, { status: 503 });
   }
 
