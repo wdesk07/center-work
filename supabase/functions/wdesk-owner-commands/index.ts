@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
       return json(error.code === "23505" ? 409 : 503, { error: error.code === "23505" ? "duplicate_or_conflicting_record" : "owner_mutation_failed" });
     }
     const { error: finishError } = await db.schema("wdesk_control").from("audit_events").update({ outcome: "success", details: { reason, before, after } }).eq("id", audit.id);
-    return json(200, { ok: true, action, before, after, request_id: requestId, ...(finishError ? { audit_warning: "operation_completed_audit_update_failed" } : {}) });
+    return json(200, { ok: true, action, before, after, request_id: requestId, ...(finishError ? { audit_warning: "operation_completed_audit_update_failed" } : (after && after.attendance_event_error ? { audit_warning: "attendance_corrected_but_attendance_event_insert_failed" } : {})) });
   };
 
   if (body.action === "formation_upsert") {
