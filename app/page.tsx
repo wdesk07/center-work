@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";\nimport OwnerOperations from "./owner-operations";
 import {
   Activity, ArrowUpRight, Bell, Blocks, Box, BriefcaseBusiness, ChevronDown,
   CircleHelp, Cloud, Code2, Database, Gauge, Github, LockKeyhole, Menu,
   Search, Settings, ShieldCheck, Users, X, RefreshCw, ExternalLink, ClipboardList
 } from "lucide-react";
 
-type ModuleKey = "overview" | "aero" | "diagnostics" | "projects" | "commands" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
+type ModuleKey = "overview" | "aero" | "diagnostics" | "projects" | "ownerOps" | "commands" | "supabase" | "hosting" | "github" | "access" | "audit" | "settings";
 type Project = { id?: string; platform: string; project_name: string; environment: string; external_ref?: string | null; dashboard_url?: string | null; connection_status: string; notes?: string | null; updated_at?: string };
 type AuditEvent = { id: number; occurred_at: string; actor_email?: string; action: string; target_type?: string; target_ref?: string; environment: string; outcome: string; details?: Record<string, unknown> };
 type DiagnosticCheck = { component: string; check_name: string; count: number; status: string; explanation: string };
@@ -19,7 +19,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
   { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
   { key: "aero", label: "Borne de présence", icon: ClipboardList, group: "AÉRO SERVICE" },
   { key: "diagnostics", label: "Présences", icon: Activity, group: "AÉRO SERVICE" },
-  { key: "projects", label: "Formations et groupes", icon: Blocks, group: "AÉRO SERVICE" },
+  { key: "projects", label: "Formations et groupes", icon: Blocks, group: "AÉRO SERVICE" },\n  { key: "ownerOps", label: "Commandes propriétaires", icon: ShieldCheck, group: "AÉRO SERVICE" },
   { key: "commands", label: "Personnel et Direction", icon: LockKeyhole, group: "AÉRO SERVICE" },
   { key: "supabase", label: "Finances et pénalités", icon: Database, group: "AÉRO SERVICE" },
   { key: "hosting", label: "QR et synchronisation", icon: Cloud, group: "AÉRO SERVICE" },
@@ -33,7 +33,7 @@ const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
   aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes de contrôle QR depuis Aéro Service TEST." },
   diagnostics: { title: "Présences", intro: "Suivi des pointages journaliers et par séance, retards, régularisations, justifications et anomalies de synchronisation." },
-  projects: { title: "Formations et groupes", intro: "Catalogue des formations, groupes, inscriptions et associations apprenants depuis la base TEST." },
+  projects: { title: "Formations et groupes", intro: "Catalogue des formations, groupes, inscriptions et associations apprenants depuis la base TEST." },\n  ownerOps: { title: "Commandes propriétaires", intro: "Gestion contrôlée des formations, groupes, emplois du temps, présences, cours, pénalités, comptes et rôles dans TEST." },
   commands: { title: "Personnel et Direction", intro: "Dossiers des collaborateurs, rôles et interventions propriétaires contrôlées dans l’environnement TEST." },
   supabase: { title: "Finances et pénalités", intro: "Consultation des pénalités, règles, paiements, reçus et soldes à partir des enregistrements TEST." },
   hosting: { title: "QR et synchronisation", intro: "Demandes QR, décisions, événements hors ligne et état de synchronisation des présences." },
@@ -449,7 +449,7 @@ export default function Home() {
             </> : <div className="empty-state">Charge l’inventaire TEST.</div>}
           </div>}
 
-          {active === "commands" && <div className="panel project-panel">
+          {active === "ownerOps" && (inventory ? <OwnerOperations inventory={inventory} onRefresh={() => loadCommandInventory(false)} onNotice={setNotice} /> : <div className="empty-state">Chargement de l’inventaire TEST…</div>)}\n\n          {active === "commands" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Personnel et Direction · TEST</h3><p>Fiches collaborateurs, formateurs et rôles sont rapprochés par identifiant de profil.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser <RefreshCw size={15}/></button></div>
             {inventory ? <div className="audit-list">{inventory.profiles.filter((p:any)=>inventory.staff.some((s:any)=>s.id===p.id)||inventory.teachers.some((t:any)=>t.id===p.id)||inventory.user_roles.some((r:any)=>["DIRECTOR","PRE_ADMIN","ADMIN","SECRETARY","SECRETARIAT"].includes(String(inventory.roles.find((role:any)=>role.id===r.role_id)?.code ?? "").toUpperCase()))).map((p:any)=>{const s=inventory.staff.find((x:any)=>x.id===p.id);const t=inventory.teachers.find((x:any)=>x.id===p.id);const roles=inventory.user_roles.filter((x:any)=>x.user_id===p.id).map((x:any)=>inventory.roles.find((r:any)=>r.id===x.role_id)?.code).filter(Boolean);return <div className="audit-row" key={p.id}><div><b>{p.display_name ?? p.email ?? p.id}</b><small>{p.email ?? "Sans e-mail"} · {s?.position ?? t?.specialization ?? "Fonction à vérifier"} · {s?.department ?? "Département non renseigné"}</small><small>Matricule : {s?.staff_number ?? t?.teacher_number ?? "Non attribué"} · Rôles : {roles.join(" · ") || "Aucun rôle"}</small></div><Status tone={p.status==="active"?"good":"warn"}>{p.status}</Status></div>})}</div> : <div className="empty-state">Charge l’inventaire TEST.</div>}
           </div>}
