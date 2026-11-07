@@ -228,6 +228,65 @@ Deno.serve(async (req: Request) => {
     return auditWrite(mode === "assign" ? "user_role.assigned" : "user_role.revoked", "user_role", targetUserId + ":" + roleId, reason, requestId, existing.data, () => mode === "assign" ? db.from("user_roles").insert({ user_id: targetUserId, role_id: roleId }).select("user_id,role_id").single() : db.from("user_roles").delete().eq("user_id", targetUserId).eq("role_id", roleId).select("user_id,role_id").single());
   }
 
+
+  if (body.action === "attendance_correct") {
+    const targetType = body.target_type === "daily" ? "daily" : body.target_type === "session" ? "session" : "";
+    const id = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const status = typeof body.status === "string" ? body.status : "";
+    const arrivedAt = body.arrived_at === null || body.arrived_at === "" ? null : typeof body.arrived_at === "string" ? body.arrived_at : undefined;
+    const minutes = Number(body.minutes_after_cutoff);
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const validStatuses = targetType === "daily" ? ["on_time", "late", "absent", "regularized"] : ["present", "late", "absent", "pending"];
+    if (!targetType || !ownerUuid.test(id) || !validStatuses.includes(status) || arrivedAt === undefined || (arrivedAt !== null && Number.isNaN(Date.parse(arrivedAt))) || !Number.isInteger(minutes) || minutes < 0 || minutes > 10000 || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "attendance_correction_fields_reason_and_confirmation_required" });
+    const table = targetType === "daily" ? "daily_attendance" : "session_attendance";
+    const fields = targetType === "daily" ? "id,person_id,local_date,status,arrived_at,minutes_after_cutoff" : "id,person_id,session_id,local_date,status,arrived_at,minutes_after_cutoff,daily_attendance_id";
+    const found = await db.from(table).select(fields).eq("id", id).maybeSingle();
+    if (found.error) return json(503, { error: "attendance_lookup_failed" });
+    if (!found.data) return json(404, { error: "attendance_record_not_found" });
+    return auditWrite("attendance.corrected", targetType, id, reason, requestId, found.data, async () => {
+      const { data: after, error } = await db.from(table).update({ status, arrived_at: arrivedAt, minutes_after_cutoff: minutes }).eq("id", id).select(fields).single();
+      if (error || !after) return { data: null, error: error ?? { code: "attendance_correction_failed" } };
+      const { error: eventError } = await db.from("attendance_events").insert({
+        attendance_id: targetType === "daily" ? id : (found.data as any).daily_attendance_id ?? null,
+        person_id: (found.data as any).person_id, event_type: "correction", source: "wdesk_owner",
+        created_by: user.id, metadata: { target_type: targetType, target_id: id, reason, request_id: requestId, before: found.data, after },
+      });
+      return { data: { ...after, attendance_event_error: eventError?.code ?? null }, error: null };
+    });
+  }
+
+  if (body.action === "account_invite") {
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const displayName = typeof body.display_name === "string" ? body.display_name.trim() : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || !displayName || displayName.length > 120 || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "account_invite_fields_reason_and_confirmation_required" });
+    const users = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (users.error) return json(503, { error: "auth_user_lookup_failed" });
+    if (users.data.users.some((u: any) => String(u.email ?? "").toLowerCase() === email)) return json(409, { error: "auth_user_already_exists" });
+    const redirectTo = (Deno.env.get("CONTROL_CENTER_ORIGIN") ?? "https://center-work.vercel.app") + "/auth/callback";
+    return auditWrite("account.invited", "auth_user", email, reason, requestId, null,
+      () => db.auth.admin.inviteUserByEmail(email, { data: { display_name: displayName }, redirectTo }));
+  }
+
+  if (body.action === "account_status") {
+    const targetUserId = typeof body.target_user_id === "string" ? body.target_user_id.trim() : "";
+    const status = body.status === "suspended" ? "suspended" : body.status === "active" ? "active" : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    if (!ownerUuid.test(targetUserId) || !status || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "account_status_fields_reason_and_confirmation_required" });
+    const ownerTarget = await db.schema("wdesk_control").from("owner_accounts").select("id").eq("auth_user_id", targetUserId).maybeSingle();
+    if (ownerTarget.error) return json(503, { error: "owner_target_lookup_failed" });
+    if (ownerTarget.data) return json(403, { error: "primary_owner_account_is_protected" });
+    const found = await db.auth.admin.getUserById(targetUserId);
+    if (found.error || !found.data.user) return json(404, { error: "auth_user_not_found" });
+    const before = { id: found.data.user.id, email: found.data.user.email, banned_until: found.data.user.banned_until };
+    const banDuration = status === "suspended" ? "876000h" : "none";
+    return auditWrite(status === "suspended" ? "account.suspended" : "account.reactivated", "auth_user", targetUserId, reason, requestId, before,
+      () => db.auth.admin.updateUserById(targetUserId, { ban_duration: banDuration }));
+  }
+
   if (body.action === "payment_validate") {
     const paymentId = typeof body.target_id === "string" ? body.target_id.trim() : "";
     const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
