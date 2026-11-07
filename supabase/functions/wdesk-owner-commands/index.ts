@@ -100,6 +100,134 @@ Deno.serve(async (req: Request) => {
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json" }); }
+
+  const ownerUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const auditWrite = async (action: string, targetType: string, targetRef: string | null, reason: string, requestId: string, before: unknown, write: () => Promise<any>): Promise<Response> => {
+    if (!requestId || requestId.length > 100 || reason.length < 8 || reason.length > 500) return json(400, { error: "request_id_and_reason_required" });
+    const { data: duplicate } = await db.schema("wdesk_control").from("audit_events").select("id").eq("request_id", requestId).limit(1).maybeSingle();
+    if (duplicate) return json(409, { error: "request_already_processed" });
+    const { data: audit, error: auditError } = await db.schema("wdesk_control").from("audit_events").insert({
+      actor_auth_user_id: user.id, actor_email: user.email.toLowerCase(), action, target_type: targetType,
+      target_ref: targetRef, environment: "test", outcome: "pending", request_id: requestId,
+      details: { reason, before, stage: "mutation_started" },
+    }).select("id").single();
+    if (auditError || !audit) return json(503, { error: "audit_start_failed_operation_not_started" });
+    const { data: after, error } = await write();
+    if (error) {
+      await db.schema("wdesk_control").from("audit_events").update({ outcome: "failure", details: { reason, before, failure_code: error.code ?? "mutation_failed" } }).eq("id", audit.id);
+      return json(error.code === "23505" ? 409 : 503, { error: error.code === "23505" ? "duplicate_or_conflicting_record" : "owner_mutation_failed" });
+    }
+    const { error: finishError } = await db.schema("wdesk_control").from("audit_events").update({ outcome: "success", details: { reason, before, after } }).eq("id", audit.id);
+    return json(200, { ok: true, action, before, after, request_id: requestId, ...(finishError ? { audit_warning: "operation_completed_audit_update_failed" } : {}) });
+  };
+
+  if (body.action === "formation_upsert") {
+    const id = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const description = typeof body.description === "string" ? body.description.trim() : null;
+    const duration = typeof body.duration === "string" ? body.duration.trim() : null;
+    const status = ["active", "inactive", "archived"].includes(String(body.status)) ? String(body.status) : "active";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    if ((id && !ownerUuid.test(id)) || !code || code.length > 40 || !name || name.length > 160 || (description && description.length > 2000) || (duration && duration.length > 80) || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "formation_fields_reason_and_confirmation_required" });
+    let before: any = null;
+    if (id) { const found = await db.from("formations").select("id,code,name,description,duration,status").eq("id", id).maybeSingle(); if (found.error) return json(503, { error: "formation_lookup_failed" }); if (!found.data) return json(404, { error: "formation_not_found" }); before = found.data; }
+    const values = { code, name, description, duration, status, updated_at: new Date().toISOString() };
+    return auditWrite(id ? "formation.updated" : "formation.created", "formation", id || null, reason, requestId, before, () => id ? db.from("formations").update(values).eq("id", id).select("id,code,name,description,duration,status").single() : db.from("formations").insert(values).select("id,code,name,description,duration,status").single());
+  }
+
+  if (body.action === "group_upsert") {
+    const id = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const formationId = typeof body.formation_id === "string" ? body.formation_id.trim() : "";
+    const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const academicYear = typeof body.academic_year === "string" ? body.academic_year.trim() : "";
+    const capacity = body.capacity === null || body.capacity === "" ? null : Number(body.capacity);
+    const status = ["active", "inactive", "archived"].includes(String(body.status)) ? String(body.status) : "active";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    if ((id && !ownerUuid.test(id)) || !ownerUuid.test(formationId) || !code || code.length > 40 || !name || name.length > 160 || !academicYear || academicYear.length > 40 || (capacity !== null && (!Number.isInteger(capacity) || capacity < 1)) || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "group_fields_reason_and_confirmation_required" });
+    const formation = await db.from("formations").select("id,status").eq("id", formationId).maybeSingle();
+    if (formation.error) return json(503, { error: "formation_lookup_failed" });
+    if (!formation.data) return json(404, { error: "formation_not_found" });
+    if (status === "active" && formation.data.status !== "active") return json(409, { error: "active_formation_required" });
+    let before: any = null;
+    if (id) { const found = await db.from("groups").select("id,formation_id,code,name,academic_year,capacity,status").eq("id", id).maybeSingle(); if (found.error) return json(503, { error: "group_lookup_failed" }); if (!found.data) return json(404, { error: "group_not_found" }); before = found.data; }
+    const values = { formation_id: formationId, code, name, academic_year: academicYear, capacity, status, updated_at: new Date().toISOString() };
+    return auditWrite(id ? "group.updated" : "group.created", "group", id || null, reason, requestId, before, () => id ? db.from("groups").update(values).eq("id", id).select("id,formation_id,code,name,academic_year,capacity,status").single() : db.from("groups").insert(values).select("id,formation_id,code,name,academic_year,capacity,status").single());
+  }
+
+  if (body.action === "weekly_schedule_upsert") {
+    const id = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const formationId = typeof body.formation_id === "string" ? body.formation_id.trim() : "";
+    const weekday = Number(body.weekday_iso), subject = typeof body.subject === "string" ? body.subject.trim() : "";
+    const start = typeof body.planned_start === "string" ? body.planned_start.trim() : "";
+    const end = typeof body.planned_end === "string" ? body.planned_end.trim() : "";
+    const active = body.active !== false, reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    const timePattern = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+    if ((id && !ownerUuid.test(id)) || !ownerUuid.test(formationId) || !Number.isInteger(weekday) || weekday < 1 || weekday > 7 || !subject || subject.length > 160 || !timePattern.test(start) || !timePattern.test(end) || end <= start || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "weekly_schedule_fields_reason_and_confirmation_required" });
+    const formation = await db.from("formations").select("id").eq("id", formationId).maybeSingle();
+    if (formation.error) return json(503, { error: "formation_lookup_failed" });
+    if (!formation.data) return json(404, { error: "formation_not_found" });
+    let before: any = null;
+    if (id) { const found = await db.from("formation_weekly_schedule").select("id,formation_id,weekday_iso,subject,planned_start,planned_end,active").eq("id", id).maybeSingle(); if (found.error) return json(503, { error: "schedule_lookup_failed" }); if (!found.data) return json(404, { error: "schedule_not_found" }); before = found.data; }
+    const values = { formation_id: formationId, weekday_iso: weekday, subject, planned_start: start, planned_end: end, active };
+    return auditWrite(id ? "weekly_schedule.updated" : "weekly_schedule.created", "formation_weekly_schedule", id || null, reason, requestId, before, () => id ? db.from("formation_weekly_schedule").update(values).eq("id", id).select("id,formation_id,weekday_iso,subject,planned_start,planned_end,active").single() : db.from("formation_weekly_schedule").insert(values).select("id,formation_id,weekday_iso,subject,planned_start,planned_end,active").single());
+  }
+
+  if (body.action === "course_session_status") {
+    const id = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const status = body.status === "suspended" ? "suspended" : body.status === "scheduled" ? "scheduled" : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "", requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    if (!ownerUuid.test(id) || !status || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "course_session_status_reason_and_confirmation_required" });
+    const found = await db.from("course_sessions").select("id,formation_id,group_id,session_date,planned_start,planned_end,status,subject").eq("id", id).maybeSingle();
+    if (found.error) return json(503, { error: "course_session_lookup_failed" });
+    if (!found.data) return json(404, { error: "course_session_not_found" });
+    if (!["scheduled", "suspended"].includes(found.data.status)) return json(409, { error: "course_session_not_in_suspendable_state" });
+    if (found.data.status === status) return json(409, { error: "course_session_already_in_requested_state" });
+    return auditWrite(status === "suspended" ? "course_session.suspended" : "course_session.resumed", "course_session", id, reason, requestId, found.data, () => db.from("course_sessions").update({ status }).eq("id", id).select("id,formation_id,group_id,session_date,planned_start,planned_end,status,subject").single());
+  }
+
+  if (body.action === "penalty_rule_upsert") {
+    const id = typeof body.target_id === "string" ? body.target_id.trim() : "";
+    const personType = ["student", "staff", "teacher"].includes(String(body.person_type)) ? String(body.person_type) : "";
+    const penaltyType = typeof body.penalty_type === "string" ? body.penalty_type.trim() : "";
+    const description = typeof body.description === "string" ? body.description.trim() : null;
+    const scope = ["all", "students", "staff", "teacher"].includes(String(body.target_scope)) ? String(body.target_scope) : "";
+    const mode = ["automatic", "manual"].includes(String(body.application_mode)) ? String(body.application_mode) : "";
+    const minDelay = Number(body.min_delay_minutes), maxDelay = body.max_delay_minutes === null || body.max_delay_minutes === "" ? null : Number(body.max_delay_minutes);
+    const tolerance = Number(body.tolerance_minutes), amount = Number(body.amount_fcfa), priority = Number(body.priority);
+    const formationId = body.formation_id === null || body.formation_id === "" ? null : typeof body.formation_id === "string" ? body.formation_id.trim() : undefined;
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "", requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    if ((id && !ownerUuid.test(id)) || !personType || !penaltyType || penaltyType.length > 80 || !scope || !mode || !Number.isInteger(minDelay) || minDelay < 0 || (maxDelay !== null && (!Number.isInteger(maxDelay) || maxDelay < minDelay)) || !Number.isInteger(tolerance) || tolerance < 0 || !Number.isInteger(amount) || amount <= 0 || !Number.isInteger(priority) || priority < 0 || (formationId !== null && (formationId === undefined || !ownerUuid.test(formationId))) || typeof body.blocks_access !== "boolean" || typeof body.active !== "boolean" || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "penalty_rule_fields_reason_and_confirmation_required" });
+    let before: any = null;
+    if (id) { const found = await db.from("penalty_rules").select("*").eq("id", id).maybeSingle(); if (found.error) return json(503, { error: "penalty_rule_lookup_failed" }); if (!found.data) return json(404, { error: "penalty_rule_not_found" }); before = found.data; }
+    const values = { person_type: personType, penalty_type: penaltyType, description, target_scope: scope, application_mode: mode, min_delay_minutes: minDelay, max_delay_minutes: maxDelay, tolerance_minutes: tolerance, amount_fcfa: amount, priority, formation_id: formationId, blocks_access: body.blocks_access, active: body.active };
+    return auditWrite(id ? "penalty_rule.updated" : "penalty_rule.created", "penalty_rule", id || null, reason, requestId, before, () => id ? db.from("penalty_rules").update(values).eq("id", id).select("*").single() : db.from("penalty_rules").insert(values).select("*").single());
+  }
+
+  if (body.action === "role_assignment") {
+    const targetUserId = typeof body.target_user_id === "string" ? body.target_user_id.trim() : "";
+    const roleId = typeof body.role_id === "string" ? body.role_id.trim() : "";
+    const mode = body.mode === "revoke" ? "revoke" : body.mode === "assign" ? "assign" : "";
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "", requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
+    if (!ownerUuid.test(targetUserId) || !ownerUuid.test(roleId) || !mode || reason.length < 8 || body.confirmation !== "CONFIRMER") return json(400, { error: "role_assignment_fields_reason_and_confirmation_required" });
+    const ownerTarget = await db.schema("wdesk_control").from("owner_accounts").select("id").eq("auth_user_id", targetUserId).maybeSingle();
+    if (ownerTarget.error) return json(503, { error: "owner_target_lookup_failed" });
+    if (ownerTarget.data) return json(403, { error: "primary_owner_roles_are_protected" });
+    const [authTarget, roleTarget] = await Promise.all([db.auth.admin.getUserById(targetUserId), db.from("roles").select("id,code,name").eq("id", roleId).maybeSingle()]);
+    if (authTarget.error || !authTarget.data.user) return json(404, { error: "auth_user_not_found" });
+    if (roleTarget.error) return json(503, { error: "role_lookup_failed" });
+    if (!roleTarget.data || ["OWNER", "PRIMARY_OWNER", "WDESK_OWNER"].includes(String(roleTarget.data.code).toUpperCase())) return json(403, { error: "role_not_assignable" });
+    const existing = await db.from("user_roles").select("user_id,role_id").eq("user_id", targetUserId).eq("role_id", roleId).maybeSingle();
+    if (existing.error) return json(503, { error: "role_assignment_lookup_failed" });
+    if (mode === "assign" && existing.data) return json(409, { error: "role_already_assigned" });
+    if (mode === "revoke" && !existing.data) return json(404, { error: "role_assignment_not_found" });
+    return auditWrite(mode === "assign" ? "user_role.assigned" : "user_role.revoked", "user_role", targetUserId + ":" + roleId, reason, requestId, existing.data, () => mode === "assign" ? db.from("user_roles").insert({ user_id: targetUserId, role_id: roleId }).select("user_id,role_id").single() : db.from("user_roles").delete().eq("user_id", targetUserId).eq("role_id", roleId).select("user_id,role_id").single());
+  }
+
   if (body.action === "payment_validate") {
     const paymentId = typeof body.target_id === "string" ? body.target_id.trim() : "";
     const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
