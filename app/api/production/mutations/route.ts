@@ -23,6 +23,7 @@ const allowedActions = new Set([
   "user_role_revoke",
   "account_invite",
   "student_archive",
+  "student_hard_delete",
 ]);
 
 function fail(error: string, status: number) {
@@ -100,6 +101,71 @@ export async function POST(request: Request) {
     });
     if (error) return NextResponse.json({ error: String(error.message ?? "student_archive_failed").slice(0, 240), environment: "production", writable: true }, { status: 422, headers: { "Cache-Control": "no-store" } });
     return NextResponse.json({ ...data, environment: "production", writable: true }, { headers: { "Cache-Control": "no-store, private" } });
+  }
+
+  if (body.action === "student_hard_delete") {
+    const targetId = String(body.payload.target_id ?? "");
+    const expectedEmail = String(body.payload.expected_email ?? "").trim().toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId)) return fail("valid_student_id_required", 400);
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(expectedEmail)) return fail("valid_target_email_required", 400);
+    if (body.payload.delete_confirmation !== "SUPPRIMER DEFINITIVEMENT") return fail("permanent_delete_confirmation_required", 400);
+
+    const { data: targetAuth, error: targetAuthError } = await production.auth.admin.getUserById(targetId);
+    if (targetAuthError || !targetAuth.user || String(targetAuth.user.email ?? "").toLowerCase() !== expectedEmail) {
+      return fail("target_auth_identity_not_verified", 409);
+    }
+
+    const { data: prepared, error: prepareError } = await production.rpc("wdesk_owner_prepare_student_hard_delete", {
+      p_actor_id: ownerProfile.id,
+      p_target_id: targetId,
+      p_expected_email: expectedEmail,
+      p_reason: body.reason.trim(),
+      p_request_id: body.request_id,
+    });
+    if (prepareError) {
+      return NextResponse.json({ error: String(prepareError.message ?? "student_hard_delete_precheck_failed").slice(0, 240), environment: "production", writable: false }, { status: 422, headers: { "Cache-Control": "no-store" } });
+    }
+
+    const { error: deleteError } = await production.auth.admin.deleteUser(targetId);
+    if (deleteError) {
+      return NextResponse.json({
+        error: "auth_deletion_pending_retry_required",
+        detail: String(deleteError.message ?? "Auth deletion failed").slice(0, 180),
+        partial: true,
+        registrations_deleted: prepared?.registrations_deleted ?? 0,
+        environment: "production",
+        writable: true,
+      }, { status: 202, headers: { "Cache-Control": "no-store, private" } });
+    }
+
+    const auditUpdate = await production.from("audit_logs")
+      .update({
+        action: "student_hard_delete",
+        new_values: {
+          ...(prepared ?? {}),
+          request_id: body.request_id,
+          target_email: expectedEmail,
+          reason: body.reason.trim(),
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        },
+      })
+      .eq("module", "wdesk_production")
+      .eq("action", "student_hard_delete_pending")
+      .eq("new_values->>request_id", body.request_id);
+
+    return NextResponse.json({
+      ok: true,
+      action: "student_hard_delete",
+      entity_id: targetId,
+      target_email: expectedEmail,
+      registrations_deleted: prepared?.registrations_deleted ?? 0,
+      auth_user_deleted: true,
+      audit_warning: Boolean(auditUpdate.error),
+      request_id: body.request_id,
+      environment: "production",
+      writable: true,
+    }, { headers: { "Cache-Control": "no-store, private" } });
   }
 
   if (body.action === "account_invite") {
