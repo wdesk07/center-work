@@ -18,7 +18,7 @@ export default function ProductionGovernance({inventory,onRefresh}:Props){
  async function send(action:string,payload:Record<string,unknown>,success:string){
   if(reason.trim().length<8){setMessage("Le motif doit contenir au moins 8 caractères. Choisis un exemple ou explique librement la raison.");return;}if(confirmation.trim()!=="CONFIRMER"){setMessage("Dans Confirmation, saisis CONFIRMER. Les espaces avant ou après sont ignorés.");return;}
   setBusy(true);setMessage("");
-  try{const res=await fetch("/api/production/mutations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload,reason:reason.trim(),confirmation:"CONFIRMER",request_id:crypto.randomUUID()})});const data=await res.json();if(!res.ok||data.error)throw new Error(data.error??"Commande refusée");setMessage(success);setReason("");setConfirmation("");await onRefresh();}
+  try{const res=await fetch("/api/production/mutations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload,reason:reason.trim(),confirmation:"CONFIRMER",request_id:crypto.randomUUID()})});const data=await res.json();if(!res.ok||data.error)throw new Error(data.error??"Commande refusée");setMessage(data.audit_warning?"Compte supprimé, mais la mise à jour finale du journal d’audit doit être vérifiée.":success);setReason("");setConfirmation("");await onRefresh();}
   catch(e){setMessage(e instanceof Error?e.message:"Échec de l’opération");}finally{setBusy(false);}
  }
  const I="command-input",L="command-label",B="primary-button";
