@@ -15,7 +15,7 @@ export default function ProductionGovernance({inventory,onRefresh}:Props){
  async function send(action:string,payload:Record<string,unknown>,success:string){
   if(reason.trim().length<8||confirmation!=="CONFIRMER"){setMessage("Ajoute un motif d’au moins 8 caractères et saisis CONFIRMER.");return;}
   setBusy(true);setMessage("");
-  try{const res=await fetch("/api/production/mutations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload,reason:reason.trim(),confirmation:"CONFIRMER",request_id:crypto.randomUUID()})});const data=await res.json();if(!res.ok)throw new Error(data.error??"Commande refusée");setMessage(success);setReason("");setConfirmation("");await onRefresh();}
+  try{const res=await fetch("/api/production/mutations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload,reason:reason.trim(),confirmation:"CONFIRMER",request_id:crypto.randomUUID()})});const data=await res.json();if(!res.ok||data.error)throw new Error(data.error??"Commande refusée");setMessage(success);setReason("");setConfirmation("");await onRefresh();}
   catch(e){setMessage(e instanceof Error?e.message:"Échec de l’opération");}finally{setBusy(false);}
  }
  const I="command-input",L="command-label",B="primary-button";
