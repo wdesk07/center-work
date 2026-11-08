@@ -85,6 +85,9 @@ begin
     or exists(select 1 from public.presence_kiosk_devices where activated_by=p_target_id)
     or exists(select 1 from public.registration_documents where validated_by=p_target_id)
     or exists(select 1 from public.system_settings where updated_by=p_target_id)
+    or exists(select 1 from public.registrations where created_by=p_target_id or reviewed_by=p_target_id)
+    or exists(select 1 from public.user_roles where assigned_by=p_target_id)
+    or exists(select 1 from public.audit_logs where actor_id=p_target_id)
   then
     raise exception 'STUDENT_HAS_HISTORY_ARCHIVE_REQUIRED';
   end if;
