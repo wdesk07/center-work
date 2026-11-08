@@ -109,6 +109,7 @@ export async function POST(request: Request) {
     const { data: role, error: roleError } = await production.from("roles").select("id,code").eq("id", roleId).maybeSingle();
     if (roleError || !role || ["DIRECTOR", "PRE_ADMIN"].includes(String(role.code).toUpperCase())) return fail("standard_role_required_for_invitation", 400);
     const { data: invited, error: inviteError } = await production.auth.admin.inviteUserByEmail(email, {
+      redirectTo: origin ? new URL("/auth/callback", origin).toString() : undefined,
       data: { first_name: firstName, last_name: lastName, display_name: [firstName, lastName].join(" "), phone: phone || null },
     });
     if (inviteError || !invited.user) return fail(String(inviteError?.message ?? "account_invitation_failed").slice(0, 200), 422);
