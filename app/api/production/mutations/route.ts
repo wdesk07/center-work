@@ -22,6 +22,7 @@ const allowedActions = new Set([
   "user_role_assign",
   "user_role_revoke",
   "account_invite",
+  "student_archive",
 ]);
 
 function fail(error: string, status: number) {
@@ -87,6 +88,19 @@ export async function POST(request: Request) {
   const roleCodes = new Set((roles ?? []).map((item) => String(item.code).toUpperCase()));
   if (rolesError || !roleCodes.has("DIRECTOR") || !roleCodes.has("PRE_ADMIN")) return fail("production_owner_roles_not_verified", 403);
 
+
+  if (body.action === "student_archive") {
+    const targetId = String(body.payload.target_id ?? "");
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId)) return fail("valid_student_id_required", 400);
+    const { data, error } = await production.rpc("wdesk_owner_archive_student", {
+      p_actor_id: ownerProfile.id,
+      p_target_id: targetId,
+      p_reason: body.reason.trim(),
+      p_request_id: body.request_id,
+    });
+    if (error) return NextResponse.json({ error: String(error.message ?? "student_archive_failed").slice(0, 240), environment: "production", writable: true }, { status: 422, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ...data, environment: "production", writable: true }, { headers: { "Cache-Control": "no-store, private" } });
+  }
 
   if (body.action === "account_invite") {
     const email = String(body.payload.email ?? "").trim().toLowerCase();
