@@ -29,6 +29,13 @@ function fail(error: string, status: number) {
 }
 
 export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("host");
+  if (origin && host) {
+    try { if (new URL(origin).host !== host) return fail("cross_origin_request_forbidden", 403); }
+    catch { return fail("invalid_origin", 403); }
+  }
+  if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) return fail("json_content_type_required", 415);
   const wdeskUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const wdeskKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const productionUrl = process.env.AERO_PRODUCTION_SUPABASE_URL;
