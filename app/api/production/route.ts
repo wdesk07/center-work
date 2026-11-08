@@ -44,8 +44,8 @@ export async function GET() {
   const productionUrl = process.env.AERO_PRODUCTION_SUPABASE_URL;
   const productionKey = process.env.AERO_PRODUCTION_SUPABASE_SERVICE_ROLE_KEY;
 
-  if (wdeskUrl && new URL(wdeskUrl).hostname !== "nuijzdqnhjzcnqpfqvvl.supabase.co") {
-    return NextResponse.json({ error: "wdesk_test_project_mismatch", environment: "production", writable: false }, { status: 503 });
+  if (wdeskUrl && new URL(wdeskUrl).hostname !== "tsyhuuqtbcdpolhmmeri.supabase.co") {
+    return NextResponse.json({ error: "production_auth_project_mismatch", environment: "production", writable: false }, { status: 503 });
   }
   if (!wdeskUrl || !wdeskKey || !productionUrl || !productionKey) {
     return NextResponse.json({ error: "production_readonly_not_configured", environment: "production", writable: false }, { status: 503 });
@@ -62,9 +62,6 @@ export async function GET() {
   const accessToken = sessionData.session?.access_token;
   if (sessionError || !accessToken) return NextResponse.json({ error: "authentication_required" }, { status: 401 });
 
-  const isOwner = await authorizeOwner(accessToken, wdeskUrl, wdeskKey);
-  if (!isOwner) return NextResponse.json({ error: "primary_owner_only" }, { status: 403 });
-
   if (new URL(productionUrl).protocol !== "https:" || new URL(productionUrl).hostname !== "tsyhuuqtbcdpolhmmeri.supabase.co") {
     return NextResponse.json({ error: "production_project_mismatch", environment: "production", writable: false }, { status: 503 });
   }
@@ -76,6 +73,10 @@ export async function GET() {
 
   const { data: ownerProfile, error: ownerProfileError } = await production
     .from("profiles").select("id,status,email").eq("email", "wdesk87@gmail.com").maybeSingle();
+  const { data: authenticatedUser, error: authenticatedUserError } = await wdesk.auth.getUser(accessToken);
+  if (authenticatedUserError || !authenticatedUser.user || authenticatedUser.user.id !== ownerProfile?.id || String(authenticatedUser.user.email ?? "").toLowerCase() !== "wdesk87@gmail.com") {
+    return NextResponse.json({ error: "primary_owner_authentication_not_verified", environment: "production", writable: false }, { status: 403 });
+  }
   if (ownerProfileError || !ownerProfile || ownerProfile.status !== "active") {
     return NextResponse.json({ error: "production_owner_profile_not_verified", environment: "production", writable: false }, { status: 403 });
   }
