@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     const targetId = String(body.payload.target_id ?? "");
     const expectedEmail = String(body.payload.expected_email ?? "").trim().toLowerCase();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId)) return fail("valid_student_id_required", 400);
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(expectedEmail)) return fail("valid_target_email_required", 400);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(expectedEmail)) return fail("valid_target_email_required", 400);
     if (body.payload.delete_confirmation !== "SUPPRIMER DEFINITIVEMENT") return fail("permanent_delete_confirmation_required", 400);
 
     const { data: targetAuth, error: targetAuthError } = await production.auth.admin.getUserById(targetId);
@@ -152,7 +152,8 @@ export async function POST(request: Request) {
       })
       .eq("module", "wdesk_production")
       .eq("action", "student_hard_delete_pending")
-      .eq("new_values->>request_id", body.request_id)\n      .select("id").maybeSingle();
+      .eq("new_values->>request_id", body.request_id)
+      .select("id").maybeSingle();
 
     return NextResponse.json({
       ok: true,
