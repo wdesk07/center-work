@@ -119,7 +119,7 @@ export async function GET() {
     project_ref: "tsyhuuqtbcdpolhmmeri",
     owner: { verified: true, email: "wdesk87@gmail.com", production_profile_id: ownerProfile.id, roles: ["DIRECTOR", "PRE_ADMIN"] },
     inventory: Object.fromEntries(entries.map(([name, result]) => [name, result.data])),
-    capabilities: { inventory_read: true, mutations: false, arbitrary_sql: false, auth_user_admin: false },
+    capabilities: { inventory_read: true, mutations_via_allowlisted_api: true, arbitrary_sql: false, auth_user_invite: true, auth_user_admin: false },
   }, { headers: { "Cache-Control": "no-store, private" } });
 }
 
