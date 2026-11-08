@@ -436,7 +436,7 @@ export default function Home() {
 
           {active === "production" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Aéro Service · PRODUCTION</h3><p>Projet Supabase <b>tsyhuuqtbcdpolhmmeri</b> · données réelles · périmètre PROD isolé.</p></div><Status tone="good">PROD CONTRÔLÉE</Status></div>
-            <ProductionOperations inventory={productionInventory} onRefresh={loadProductionInventory}/>
+            <ProductionOperations inventory={productionInventory ?? {}} onRefresh={loadProductionInventory}/>
               <div className="section-title"><div><h2>Inventaire de production</h2><p>Chargement direct via la route serveur protégée ; aucun basculement du client Supabase TEST.</p></div><button className="subtle-button" disabled={productionLoading} onClick={() => void loadProductionInventory()}>{productionLoading ? "Lecture…" : "Actualiser la production"} <RefreshCw size={15}/></button></div>
             {productionLoading && <div className="empty-state">Lecture de l’inventaire PRODUCTION…</div>}
             {productionError && <div className="notice"><Activity size={17}/>{productionError}</div>}
