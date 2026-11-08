@@ -21,8 +21,8 @@ async function verifyProductionOwner() {
       setAll: (items) => items.forEach(({ name, value, options }) => store.set(name, value, options)),
     },
   });
-  const { data: session, error: sessionError } = await auth.auth.getSession();
-  const token = session.data.session?.access_token;
+  const { data: sessionData, error: sessionError } = await auth.auth.getSession();
+  const token = sessionData.session?.access_token;
   if (sessionError || !token) return { error: "authentication_required", status: 401 as const };
 
   const { data: userData, error: userError } = await auth.auth.getUser(token);
