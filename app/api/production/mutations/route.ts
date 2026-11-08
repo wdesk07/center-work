@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   const productionKey = process.env.AERO_PRODUCTION_SUPABASE_SERVICE_ROLE_KEY;
 
   if (!wdeskUrl || !wdeskKey || !productionUrl || !productionKey) return fail("production_mutations_not_configured", 503);
-  if (new URL(wdeskUrl).hostname !== "nuijzdqnhjzcnqpfqvvl.supabase.co") return fail("wdesk_test_project_mismatch", 503);
+  if (new URL(wdeskUrl).hostname !== "tsyhuuqtbcdpolhmmeri.supabase.co") return fail("production_auth_project_mismatch", 503);
   if (new URL(productionUrl).protocol !== "https:" || new URL(productionUrl).hostname !== "tsyhuuqtbcdpolhmmeri.supabase.co") return fail("production_project_mismatch", 503);
 
   let body: any;
@@ -67,24 +67,13 @@ export async function POST(request: Request) {
   const accessToken = sessionData.session?.access_token;
   if (sessionError || !accessToken) return fail("authentication_required", 401);
 
-  const ownerCheck = await fetch(`${wdeskUrl}/functions/v1/wdesk-owner-commands`, {
-    method: "GET",
-    headers: { apikey: wdeskKey, Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-  });
-  if (!ownerCheck.ok) return fail("primary_owner_only", 403);
-  const ownerPayload = await ownerCheck.json().catch(() => null);
-  if (ownerPayload?.environment !== "test" || String(ownerPayload?.owner?.email ?? "").toLowerCase() !== "wdesk87@gmail.com" || !ownerPayload?.owner?.role) {
-    return fail("primary_owner_only", 403);
-  }
-
   const production = createClient(productionUrl, productionKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { "X-WDESK-Environment": "production-owner-mutation" } },
   });
   const { data: ownerProfile, error: profileError } = await production
     .from("profiles").select("id,status,email").eq("email", "wdesk87@gmail.com").maybeSingle();
-  if (profileError || !ownerProfile || ownerProfile.status !== "active") return fail("production_owner_profile_not_verified", 403);
+  const { data: authenticatedUser, error: authenticatedUserError } = await wdesk.auth.getUser(accessToken);\n  if (authenticatedUserError || !authenticatedUser.user || authenticatedUser.user.id !== ownerProfile?.id || String(authenticatedUser.user.email ?? "").toLowerCase() !== "wdesk87@gmail.com") return fail("primary_owner_authentication_not_verified", 403);\n  if (profileError || !ownerProfile || ownerProfile.status !== "active") return fail("production_owner_profile_not_verified", 403);
 
   const { data: assignments, error: assignmentsError } = await production
     .from("user_roles").select("role_id").eq("user_id", ownerProfile.id);
