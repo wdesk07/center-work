@@ -1,33 +1,53 @@
 # WDESK — séparation TEST / PRODUCTION
 
-## Règle de sécurité
-- Le panneau WDESK et son registre propriétaire restent authentifiés sur le projet WDESK TEST `nuijzdqnhjzcnqpfqvvl`.
-- Les données Aéro Service PRODUCTION sont lues par une route serveur dédiée `GET /api/production`.
-- Cette route vérifie d'abord la session puis le propriétaire auprès de la fonction `wdesk-owner-commands` de WDESK TEST.
-- Elle utilise ensuite les identifiants serveur PRODUCTION, jamais exposés au navigateur.
-- Le projet PRODUCTION attendu est épinglé au ref `tsyhuuqtbcdpolhmmeri`.
-- La route n'accepte aucune écriture : `POST` renvoie 405. Pas de commande arbitraire, SQL, Auth Admin ni mutation.
+## Architecture et séparation
+- WDESK Control Center s'authentifie uniquement sur le projet WDESK TEST `nuijzdqnhjzcnqpfqvvl`.
+- L'inventaire Aéro Service est lu par `GET /api/production`, qui reste strictement en lecture seule.
+- Les commandes sont exclusivement envoyées à `POST /api/production/mutations`; aucune table, requête SQL ou cible de projet n'est fournie par le navigateur.
+- Les URLs sont épinglées : WDESK TEST `nuijzdqnhjzcnqpfqvvl`, Aéro Service PRODUCTION `tsyhuuqtbcdpolhmmeri`.
+- Le navigateur ne reçoit jamais la clé service-role.
+
+## Vérification propriétaire
+Chaque requête mutation vérifie :
+1. Une session active WDESK TEST.
+2. L'identité `wdesk87@gmail.com` via la fonction propriétaire WDESK TEST.
+3. Le profil Aéro Service PRODUCTION correspondant, actif, avec les deux rôles `DIRECTOR` et `PRE_ADMIN`.
+4. Le même acteur est revérifié dans la fonction SQL transactionnelle de production.
+5. La fonction SQL est exécutable par `service_role` uniquement ; ni `authenticated` ni `public` ne disposent de l'exécution.
+
+La fonction pose temporairement l'identité vérifiée dans le contexte de transaction afin que les fonctions et déclencheurs métier existants voient le véritable acteur. Cette identité n'est jamais acceptée depuis le navigateur.
+
+## Opérations activées dans le périmètre allowlist
+- Création / modification des formations, groupes, horaires et règles de pénalité.
+- Création / révocation des suspensions de cours.
+- Correction manuelle d'un pointage avec événement `correction` et audit.
+- Décision sur une justification d'absence via la fonction métier existante.
+- Décision sur une demande QR via la fonction métier existante, y compris création du pointage par les déclencheurs existants.
+- Validation / refus d'un paiement en attente via les garde-fous existants ; le reçu et la régularisation sont générés par les déclencheurs de production.
+- Suspension / réactivation d'un profil et attribution / retrait de rôles standards.
+- Invitation d'un nouveau compte par e-mail via Supabase Auth Admin ; le profil est créé par le déclencheur existant, puis un rôle standard est attribué. Les rôles `DIRECTOR` et `PRE_ADMIN` sont exclus de l'invitation et des modifications ordinaires.
+
+Toutes les mutations exigent un motif, une confirmation explicite et un identifiant de requête. Les actions transactionnelles sont consignées dans `audit_logs` avec l'ancien et le nouvel état. Les opérations financières restent soumises aux gardes de paiement, à l'immuabilité des montants et à la validation de pénalité correspondante.
 
 ## Variables Vercel requises
-Configurer côté serveur uniquement, pour l'environnement Preview en premier :
+Côté serveur uniquement, d'abord dans Preview :
 - `AERO_PRODUCTION_SUPABASE_URL=https://tsyhuuqtbcdpolhmmeri.supabase.co`
-- `AERO_PRODUCTION_SUPABASE_SERVICE_ROLE_KEY` : clé secrète du projet Aéro Service PRODUCTION.
+- `AERO_PRODUCTION_SUPABASE_SERVICE_ROLE_KEY` : clé secrète Aéro Service PRODUCTION.
 
 Ne jamais utiliser de préfixe `NEXT_PUBLIC_` pour la clé secrète. Ne jamais ajouter cette clé dans le code, un fichier .env commité, le navigateur ou un log.
 
-## Portée de l'aperçu lecture seule
-La route expose des listes plafonnées de profils, apprenants, personnel, formateurs, formations, groupes, inscriptions, présences, événements, séances, horaires, rôles, affectations de rôles, permissions, liens rôles/permissions, justifications, règles/pénalités, paiements, appareils borne, tentatives borne, demandes QR, jours d'activité, suspensions, points de contrôle, paramètres non secrets et audit. L'interface PRODUCTION présente désormais ces domaines dans un espace distinct. Les identifiants Auth, secrets des appareils et jetons ne sont pas retournés.
+## Limites et contrôles restant à faire
+- Aucune mise en production Vercel publique n'est autorisée par ce travail ; la validation continue sur Preview.
+- La gestion Auth se limite à l'invitation et à la gestion des rôles/statuts applicatifs. La suppression de comptes, les changements d'e-mail et les resets de mot de passe ne sont pas exposés.
+- Les opérations d'attribution ou de retrait des rôles `DIRECTOR` et `PRE_ADMIN` sont volontairement verrouillées.
+- Les validations QR et financières ont été testées dans des transactions annulées ; les demandes en attente réelles étaient absentes au moment des essais.
+- Le parcours d'invitation e-mail doit encore être validé avec une adresse de test autorisée et une session propriétaire réellement connectée.
+- Les opérations de création/modification et de correction ont été testées avec rollback ; aucune donnée réelle n'a été conservée par ces tests.
 
-## Limites assumées
-- Ce premier adaptateur n'active aucune commande de modification en production. Les modules PRODUCTION affichés restent en lecture seule jusqu'à l'installation et aux tests d'un exécuteur transactionnel qui transmet une identité d'acteur vérifiée aux règles métier.
-- La clé service-role a des privilèges techniques étendus : elle est confinée au serveur Vercel et le code de cette route est strictement en lecture seule. Avant toute ouverture des commandes, remplacer cette lecture par un rôle DB dédié à privilèges SELECT uniquement et des fonctions de mutation séparées avec journalisation transactionnelle.
-- La vérification propriétaire dépend du registre WDESK TEST et impose l'adresse `wdesk87@gmail.com`; la route vérifie également dans Aéro Service PRODUCTION que le profil correspondant est actif et porte simultanément les rôles `DIRECTOR` et `PRE_ADMIN`.
-- Si un tableau ou champ attendu est absent, l'inventaire échoue fermé avec une erreur, sans tenter de réparer ou modifier le schéma.
-
-## Tests à effectuer avant toute activation
-1. Sans variables de production : réponse 503 `production_readonly_not_configured`.
+## Vérifications
+1. Sans variables PROD : réponse 503.
 2. Sans session WDESK : réponse 401.
 3. Session non propriétaire : réponse 403.
-4. Propriétaire vérifié : inventaire `environment=production`, `writable=false`, ref exact.
-5. Toute requête POST : réponse 405.
-6. Vérifier dans les journaux qu'aucune requête d'écriture ne part vers le projet de production.
+4. Propriétaire confirmé dans TEST et PROD : inventaire limité en lecture et accès aux commandes allowlist.
+5. Vérifier chaque opération en Preview avec un compte de test, puis relire `audit_logs`.
+6. Ne promouvoir aucune Preview en production sans accord explicite et vérification READY.
