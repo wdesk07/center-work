@@ -17,6 +17,7 @@ const allowedActions = new Set([
   "justification_review",
   "qr_request_review",
   "payment_review",
+  "profile_update",
   "profile_status_update",
   "user_role_assign",
   "user_role_revoke",
