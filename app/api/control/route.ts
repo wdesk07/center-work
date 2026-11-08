@@ -67,7 +67,7 @@ export async function GET() {
     audit_total: count ?? 0,
     diagnostics: null,
     incidents: [],
-    capabilities: { provider_operations: false, diagnostics_read: true, incident_tracking: false },
+    capabilities: { provider_operations: true, diagnostics_read: true, incident_tracking: false },
   }, { headers: { "Cache-Control": "no-store, private" } });
 }
 
