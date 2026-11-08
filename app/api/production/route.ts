@@ -18,6 +18,7 @@ const buildReads = (production: SupabaseClient) => ({
   attendance_events: () => production.from("attendance_events").select("id,attendance_id,person_id,event_type,occurred_at,source,metadata,created_by").order("occurred_at",{ascending:false}).limit(2000),
   course_sessions: () => production.from("course_sessions").select("id,schedule_template_id,formation_id,group_id,subject_id,teacher_id,room_id,session_date,planned_start,planned_end,session_type,status,cancellation_reason").order("session_date",{ascending:false}).limit(750),
   schedule_templates: () => production.from("schedule_templates").select("id,formation_id,group_id,subject_id,teacher_id,room_id,weekday,start_time,end_time,valid_from,valid_until,recurrence_rule,status").limit(500),
+  subjects: () => production.from("subjects").select("id,formation_id,code,name,status").order("name").limit(500),
   session_attendees: () => production.from("session_attendees").select("session_id,student_id,expected").limit(1500),
   roles: () => production.from("roles").select("id,code,name,description,is_system").order("code").limit(100),
   user_roles: () => production.from("user_roles").select("user_id,role_id,assigned_by,assigned_at").limit(1500),
