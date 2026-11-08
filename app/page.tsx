@@ -515,9 +515,9 @@ export default function Home() {
             <div className="panel-heading"><div><h3>Suivi central des présences · TEST</h3><p>Les mêmes identifiants de personne relient les pointages journaliers, les séances, les justifications et les dossiers.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser les présences <RefreshCw size={15}/></button></div>
             {inventory ? <>
               <div className="stats-grid">
-                <article className="stat-card"><div className="stat-top"><span>Pointages du jour chargé</span><ClipboardList size={18}/></div><strong>{inventory.daily_attendance.filter((x:any)=>x.local_date===new Date().toLocaleDateString("en-CA")).length}</strong><small>Dans les lignes journalières TEST</small></article>
-                <article className="stat-card"><div className="stat-top"><span>Retards enregistrés</span><Activity size={18}/></div><strong>{inventory.daily_attendance.filter((x:any)=>String(x.status).toLowerCase().includes("late")||String(x.status).toLowerCase().includes("retard")).length}</strong><small>Historique chargé</small></article>
-                <article className="stat-card"><div className="stat-top"><span>Régularisations</span><ShieldCheck size={18}/></div><strong>{inventory.daily_attendance.filter((x:any)=>String(x.status).toLowerCase()==="regularized").length}</strong><small>Statut porté par la source</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Pointages du jour chargé</span><ClipboardList size={18}/></div><strong>{inventory!.daily_attendance.filter((x:any)=>x.local_date===new Date().toLocaleDateString("en-CA")).length}</strong><small>Dans les lignes journalières TEST</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Retards enregistrés</span><Activity size={18}/></div><strong>{inventory!.daily_attendance.filter((x:any)=>String(x.status).toLowerCase().includes("late")||String(x.status).toLowerCase().includes("retard")).length}</strong><small>Historique chargé</small></article>
+                <article className="stat-card"><div className="stat-top"><span>Régularisations</span><ShieldCheck size={18}/></div><strong>{inventory!.daily_attendance.filter((x:any)=>String(x.status).toLowerCase()==="regularized").length}</strong><small>Statut porté par la source</small></article>
                 <article className="stat-card"><div className="stat-top"><span>Justifications</span><ClipboardList size={18}/></div><strong>{inventory.justifications.length}</strong><small>Demandes chargées</small></article>
               </div>
               <div className="audit-list">{inventory.daily_attendance.slice(0,30).map((x:any)=><div className="audit-row" key={x.id}><div><b>{inventory.profiles.find((p:any)=>p.id===x.person_id)?.display_name ?? x.person_id}</b><small>{x.local_date} · {x.arrived_at ? new Date(x.arrived_at).toLocaleTimeString("fr-FR") : "Heure non enregistrée"} · {x.minutes_after_cutoff ?? 0} minute(s) après la limite</small></div><Status tone={["present","on_time","regularized"].includes(String(x.status).toLowerCase())?"good":String(x.status).toLowerCase().includes("late")||String(x.status).toLowerCase().includes("retard")?"warn":"muted"}>{x.status}</Status></div>)}</div>
@@ -710,7 +710,7 @@ export default function Home() {
               const authUser = inventory.auth_users.find((x: any) => x.id === p.id);
               const formation = inventory.formations.find((x: any) => x.id === (student?.formation_id ?? regs[0]?.formation_id));
               const group = inventory.groups.find((x: any) => x.id === (student?.group_id ?? regs[0]?.group_id));
-              const personDaily = inventory.daily_attendance.filter((x: any) => x.person_id === p.id);
+              const personDaily = inventory!.daily_attendance.filter((x: any) => x.person_id === p.id);
               const personSessions = inventory.session_attendance.filter((x: any) => x.person_id === p.id);
               const personPenalties = inventory.penalties.filter((x: any) => x.person_id === p.id);
               const personPayments = inventory.payments.filter((x: any) => x.person_id === p.id);
