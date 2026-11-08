@@ -16,12 +16,12 @@ Configurer côté serveur uniquement, pour l'environnement Preview en premier :
 Ne jamais utiliser de préfixe `NEXT_PUBLIC_` pour la clé secrète. Ne jamais ajouter cette clé dans le code, un fichier .env commité, le navigateur ou un log.
 
 ## Portée de l'aperçu lecture seule
-La route expose des listes plafonnées de profils, apprenants, personnel, formateurs, formations, groupes, inscriptions, présences, événements, séances, horaires, rôles, permissions, règles/pénalités, paiements, appareils borne, demandes QR, jours d'activité, suspensions, paramètres et audit. Les identifiants Auth, secrets des appareils et jetons ne sont pas retournés.
+La route expose des listes plafonnées de profils, apprenants, personnel, formateurs, formations, groupes, inscriptions, présences, événements, séances, horaires, rôles, affectations de rôles, permissions, liens rôles/permissions, justifications, règles/pénalités, paiements, appareils borne, tentatives borne, demandes QR, jours d'activité, suspensions, points de contrôle, paramètres non secrets et audit. L'interface PRODUCTION présente désormais ces domaines dans un espace distinct. Les identifiants Auth, secrets des appareils et jetons ne sont pas retournés.
 
 ## Limites assumées
-- Ce premier adaptateur n'active aucune commande de modification en production.
+- Ce premier adaptateur n'active aucune commande de modification en production. Les modules PRODUCTION affichés restent en lecture seule jusqu'à l'installation et aux tests d'un exécuteur transactionnel qui transmet une identité d'acteur vérifiée aux règles métier.
 - La clé service-role a des privilèges techniques étendus : elle est confinée au serveur Vercel et le code de cette route est strictement en lecture seule. Avant toute ouverture des commandes, remplacer cette lecture par un rôle DB dédié à privilèges SELECT uniquement et des fonctions de mutation séparées avec journalisation transactionnelle.
-- La vérification propriétaire dépend du registre WDESK TEST; la production n'héberge pas de copie du registre propriétaire.
+- La vérification propriétaire dépend du registre WDESK TEST et impose l'adresse `wdesk87@gmail.com`; la route vérifie également dans Aéro Service PRODUCTION que le profil correspondant est actif et porte simultanément les rôles `DIRECTOR` et `PRE_ADMIN`.
 - Si un tableau ou champ attendu est absent, l'inventaire échoue fermé avec une erreur, sans tenter de réparer ou modifier le schéma.
 
 ## Tests à effectuer avant toute activation
