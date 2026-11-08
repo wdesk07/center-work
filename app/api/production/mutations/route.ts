@@ -152,7 +152,7 @@ export async function POST(request: Request) {
       })
       .eq("module", "wdesk_production")
       .eq("action", "student_hard_delete_pending")
-      .eq("new_values->>request_id", body.request_id);
+      .eq("new_values->>request_id", body.request_id)\n      .select("id").maybeSingle();
 
     return NextResponse.json({
       ok: true,
