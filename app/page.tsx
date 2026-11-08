@@ -37,15 +37,15 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
   production: { title: "Aéro Service PRODUCTION", intro: "Consultation et commandes propriétaires contrôlées, directement sur la base réelle de production." },
-  aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes de contrôle QR depuis Aéro Service TEST." },
-  diagnostics: { title: "Présences", intro: "Suivi des pointages journaliers et par séance, retards, régularisations, justifications et anomalies de synchronisation." },
-  projects: { title: "Formations et groupes", intro: "Catalogue des formations, groupes, inscriptions et associations apprenants depuis la base TEST." },
+  aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes QR depuis Aéro Service PRODUCTION." },
+  diagnostics: { title: "Présences", intro: "Suivi des pointages, retards, régularisations et justifications depuis Aéro Service PRODUCTION." },
+  projects: { title: "Formations et groupes", intro: "Catalogue, groupes, inscriptions et emplois du temps depuis Aéro Service PRODUCTION." },
   ownerOps: { title: "Commandes propriétaires · PRODUCTION", intro: "Gestion contrôlée des formations, groupes, emplois du temps, présences, cours, pénalités, comptes et rôles dans la base Aéro Service PRODUCTION." },
-  commands: { title: "Personnel et Direction", intro: "Dossiers des collaborateurs, rôles et interventions propriétaires contrôlées dans l’environnement TEST." },
-  supabase: { title: "Finances et pénalités", intro: "Consultation des pénalités, règles, paiements, reçus et soldes à partir des enregistrements TEST." },
-  hosting: { title: "QR et synchronisation", intro: "Demandes QR, décisions, événements hors ligne et état de synchronisation des présences." },
+  commands: { title: "Personnel et Direction", intro: "Dossiers des collaborateurs, rôles et interventions propriétaires contrôlées dans Aéro Service PRODUCTION." },
+  supabase: { title: "Finances et pénalités", intro: "Consultation des pénalités, règles, paiements, reçus et soldes de la base PRODUCTION." },
+  hosting: { title: "QR et synchronisation", intro: "Demandes QR, décisions et état des appareils depuis Aéro Service PRODUCTION." },
   github: { title: "Maintenance", intro: "État des composants, incidents, dépendances techniques et accès aux consoles de diagnostic." },
-  access: { title: "Utilisateurs", intro: "Recherche centralisée des comptes Auth, profils, apprenants, collaborateurs, inscriptions et rôles." },
+  access: { title: "Utilisateurs", intro: "Recherche des comptes, profils, apprenants, collaborateurs, inscriptions et rôles en PRODUCTION." },
   audit: { title: "Sécurité et historique", intro: "Événements d’audit, décisions, acteurs, motifs et résultats des interventions." },
   settings: { title: "Paramètres généraux", intro: "Connexions, périmètres TEST/PROD, autorisations et réglages de sécurité du centre." },
 };
@@ -379,7 +379,10 @@ export default function Home() {
 
   function choose(key: ModuleKey) {
     setActive(key); setMobileOpen(false); setNotice("");
-    if (key === "production" || key === "ownerOps") { void loadProductionInventory(); return; }
+    const aeroModules: ModuleKey[] = ["production", "aero", "diagnostics", "projects", "ownerOps", "commands", "supabase", "hosting", "access"];
+    if (aeroModules.includes(key)) { void loadProductionInventory(); return; }
+    // WDESK workspace/security records remain on the WDESK TEST control plane.
+    if (key === "audit" || key === "settings") return;
     if (key !== "overview" && !inventory) void loadCommandInventory(false);
   }
 
@@ -434,6 +437,21 @@ export default function Home() {
               <article className="panel"><div className="panel-heading"><div><h3>État de sécurité</h3><p>État connu, sans masquer les éléments manquants</p></div><ShieldCheck size={19}/></div><div className="security-list"><div><span>Identité propriétaire</span><Status tone={data?.owner ? "good" : "warn"}>{data?.owner ? "Vérifiée" : "À vérifier"}</Status></div><div><span>Registre / audit</span><Status tone={data ? "good" : "warn"}>{data ? "API accessible" : "Indisponible"}</Status></div><div><span>Opérations fournisseur depuis l’interface</span><Status tone="warn">Pas encore activées</Status></div><div><span>Backend indépendant du TEST Aéro</span><Status tone="warn">À mettre en place</Status></div></div></article>
             </div>
           </>}
+
+          {(["aero", "diagnostics", "projects", "commands", "supabase", "hosting", "access"] as ModuleKey[]).includes(active) && <div className="panel project-panel">
+            <div className="panel-heading"><div><h3>{current.title} · AÉRO SERVICE PRODUCTION</h3><p>Source unique : Supabase PRODUCTION (tsyhuuqtbcdpolhmmeri). Aucun recours aux données TEST Aéro Service.</p></div><Status tone="good">PRODUCTION</Status></div>
+            <div className="section-title"><div><h2>Commandes et données de production</h2><p>Les rubriques métier utilisent le même inventaire PRODUCTION et les actions autorisées de l’API de production.</p></div><button className="subtle-button" disabled={productionLoading} onClick={() => void loadProductionInventory()}>{productionLoading ? "Lecture…" : "Actualiser PRODUCTION"} <RefreshCw size={15}/></button></div>
+            {productionLoading && <div className="empty-state">Lecture de la base Aéro Service PRODUCTION…</div>}
+            {productionError && <div className="notice"><Activity size={17}/>{productionError}</div>}
+            {productionInventory && <>
+              <div className="stats-grid">
+                {([["Profils","profiles"],["Apprenants","students"],["Personnel","staff"],["Formateurs","teachers"],["Formations","formations"],["Groupes","groups"],["Inscriptions","registrations"],["Pointages","attendance"],["Demandes QR","qr_requests"],["Pénalités","penalties"],["Paiements","payments"]] as const).map(([label,key]) => <article className="stat-card" key={key}><div className="stat-top"><span>{label}</span><Database size={18}/></div><strong>{(productionInventory[key] ?? []).length}</strong><small>Enregistrements PRODUCTION</small></article>)}
+              </div>
+              <ProductionOperations inventory={productionInventory} onRefresh={loadProductionInventory}/>
+              <ProductionGovernance inventory={productionInventory} onRefresh={loadProductionInventory}/>
+            </>}
+            {!productionLoading && !productionError && !productionInventory && <div className="empty-state"><b>Inventaire PRODUCTION non chargé</b><span>Relance la lecture. Aucun basculement automatique vers TEST n’est autorisé.</span></div>}
+          </div>}
 
           {active === "production" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Aéro Service · PRODUCTION</h3><p>Projet Supabase <b>tsyhuuqtbcdpolhmmeri</b> · données réelles · périmètre PROD isolé.</p></div><Status tone="good">PROD CONTRÔLÉE</Status></div>
@@ -493,7 +511,7 @@ export default function Home() {
             {!productionInventory && !productionLoading && !productionError && <div className="empty-state">Aucune donnée PRODUCTION chargée. Lance la lecture ci-dessus.</div>}
           </div>}
 
-          {active === "diagnostics" && <div className="panel project-panel">
+          {active === "diagnostics" && false && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Suivi central des présences · TEST</h3><p>Les mêmes identifiants de personne relient les pointages journaliers, les séances, les justifications et les dossiers.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser les présences <RefreshCw size={15}/></button></div>
             {inventory ? <>
               <div className="stats-grid">
@@ -527,7 +545,7 @@ export default function Home() {
             </> : <div className="empty-state">Charge l’inventaire pour consulter les présences réelles.</div>}
           </div>}
 
-          {active === "projects" && <div className="panel project-panel">
+          {active === "projects" && false && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Catalogue formations et groupes · TEST</h3><p>Associations réelles entre formations, groupes, apprenants et inscriptions.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser <RefreshCw size={15}/></button></div>
             {inventory ? <>
               <div className="stats-grid"><article className="stat-card"><div className="stat-top"><span>Formations</span><Blocks size={18}/></div><strong>{inventory.formations.length}</strong></article><article className="stat-card"><div className="stat-top"><span>Groupes</span><Users size={18}/></div><strong>{inventory.groups.length}</strong></article><article className="stat-card"><div className="stat-top"><span>Inscriptions</span><ClipboardList size={18}/></div><strong>{inventory.registrations.length}</strong></article><article className="stat-card"><div className="stat-top"><span>Emplois du temps</span><Activity size={18}/></div><strong>{inventory.weekly_schedule.length}</strong></article></div>
@@ -539,12 +557,12 @@ export default function Home() {
 
           {active === "ownerOps" && <div className="panel project-panel"><div className="panel-heading"><div><h3>Commandes propriétaires · AÉRO SERVICE PRODUCTION</h3><p>Base Supabase tsyhuuqtbcdpolhmmeri. Toutes les listes et écritures passent par les routes serveur PROD dédiées ; aucun repli vers TEST.</p></div><Status tone={productionInventory ? "good" : "warn"}>{productionInventory ? "PRODUCTION connectée" : "PRODUCTION non chargée"}</Status><button className="subtle-button" disabled={productionLoading} onClick={() => void loadProductionInventory()}>{productionLoading ? "Lecture…" : "Actualiser"} <RefreshCw size={15}/></button></div>{productionLoading && <div className="empty-state">Chargement de l’inventaire PRODUCTION…</div>}{productionError && <div className="notice"><Activity size={17}/>{productionError}</div>}{productionInventory && <><ProductionOperations inventory={productionInventory} onRefresh={loadProductionInventory}/><ProductionGovernance inventory={productionInventory} onRefresh={loadProductionInventory}/></>}{!productionInventory && !productionLoading && !productionError && <div className="empty-state">Aucune donnée PRODUCTION chargée. Actualise pour charger exclusivement la base PROD.</div>}</div>}
 
-          {active === "commands" && <div className="panel project-panel">
+          {active === "commands" && false && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Personnel et Direction · TEST</h3><p>Fiches collaborateurs, formateurs et rôles sont rapprochés par identifiant de profil.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser <RefreshCw size={15}/></button></div>
             {inventory ? <div className="audit-list">{inventory.profiles.filter((p:any)=>inventory.staff.some((s:any)=>s.id===p.id)||inventory.teachers.some((t:any)=>t.id===p.id)||inventory.user_roles.some((r:any)=>["DIRECTOR","PRE_ADMIN","ADMIN","SECRETARY","SECRETARIAT"].includes(String(inventory.roles.find((role:any)=>role.id===r.role_id)?.code ?? "").toUpperCase()))).map((p:any)=>{const s=inventory.staff.find((x:any)=>x.id===p.id);const t=inventory.teachers.find((x:any)=>x.id===p.id);const roles=inventory.user_roles.filter((x:any)=>x.user_id===p.id).map((x:any)=>inventory.roles.find((r:any)=>r.id===x.role_id)?.code).filter(Boolean);return <div className="audit-row" key={p.id}><div><b>{p.display_name ?? p.email ?? p.id}</b><small>{p.email ?? "Sans e-mail"} · {s?.position ?? t?.specialization ?? "Fonction à vérifier"} · {s?.department ?? "Département non renseigné"}</small><small>Matricule : {s?.staff_number ?? t?.teacher_number ?? "Non attribué"} · Rôles : {roles.join(" · ") || "Aucun rôle"}</small></div><Status tone={p.status==="active"?"good":"warn"}>{p.status}</Status></div>})}</div> : <div className="empty-state">Charge l’inventaire TEST.</div>}
           </div>}
 
-          {active === "supabase" && <div className="panel project-panel">
+          {active === "supabase" && false && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Finances et pénalités · TEST</h3><p>Les pénalités et paiements sont rapprochés avec la personne et le reçu lorsqu’il existe.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser <RefreshCw size={15}/></button></div>
             {inventory ? <>
               <div className="stats-grid"><article className="stat-card"><div className="stat-top"><span>Pénalités ouvertes</span><Activity size={18}/></div><strong>{inventory.penalties.filter((x:any)=>!["paid","cancelled","waived","closed"].includes(String(x.status).toLowerCase())).length}</strong><small>{inventory.penalties.filter((x:any)=>!["paid","cancelled","waived","closed"].includes(String(x.status).toLowerCase())).reduce((sum:number,x:any)=>sum+Number(x.amount_fcfa||0),0).toLocaleString("fr-FR")} FCFA</small></article><article className="stat-card"><div className="stat-top"><span>Paiements</span><ShieldCheck size={18}/></div><strong>{inventory.payments.length}</strong><small>{inventory.payments.filter((x:any)=>x.status==="validated").length} validés · {inventory.payments.filter((x:any)=>x.status==="pending").length} en attente</small></article><article className="stat-card"><div className="stat-top"><span>Règles actives</span><ClipboardList size={18}/></div><strong>{inventory.penalty_rules.filter((x:any)=>x.active).length}</strong></article></div>
@@ -570,7 +588,7 @@ export default function Home() {
             </> : <div className="empty-state">Charge l’inventaire TEST.</div>}
           </div>}
 
-          {active === "hosting" && <div className="panel project-panel">
+          {active === "hosting" && false && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>QR et synchronisation · TEST</h3><p>Demandes QR, événements hors ligne et décisions sont visibles dans un même espace.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser <RefreshCw size={15}/></button></div>
             {inventory ? <>
               <div className="stats-grid"><article className="stat-card"><div className="stat-top"><span>Demandes QR</span><Activity size={18}/></div><strong>{inventory.qr_requests.length}</strong><small>{inventory.qr_requests.filter((x:any)=>x.status==="pending_confirmation").length} en attente de décision</small></article><article className="stat-card"><div className="stat-top"><span>Événements hors ligne</span><Cloud size={18}/></div><strong>{inventory.offline_events.length}</strong><small>{inventory.offline_events.filter((x:any)=>!["approved","rejected","synced"].includes(String(x.review_status).toLowerCase())).length} à examiner</small></article></div>
@@ -605,7 +623,7 @@ export default function Home() {
             {incidents.map((x:any)=><div className="audit-row" key={x.id}><div><b>{x.title}</b><small>{x.summary} · {x.occurrence_count} détection(s)</small></div><Status tone={x.status==="open"?"warn":"good"}>{x.status}</Status></div>)}
           </div>}
 
-          {active === "aero" && <div className="panel project-panel">
+          {active === "aero" && false && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Connecté au backend Aéro Service TEST</h3><p>Source : tables opérationnelles existantes. Aucune écriture n’est effectuée depuis cette page.</p></div><Status tone="good">Lecture réelle</Status></div>
             <div className="section-title"><div><h2>Inventaire opérationnel</h2><p>{inventory ? "Données chargées depuis Supabase TEST." : "Charge les données réelles pour afficher l’état des modules."}</p></div><button className="subtle-button" disabled={inventoryLoading} onClick={() => void loadCommandInventory()}>{inventoryLoading ? "Chargement…" : "Charger les opérations"} <RefreshCw size={15}/></button></div>
             {inventory && <>
@@ -751,7 +769,7 @@ export default function Home() {
             {inventory?.formations.map(x=><div className="audit-row" key={x.id}><div><b>{x.name}</b><small>{x.code} · {x.duration ?? "Durée non précisée"}</small></div><Status>{x.status}</Status></div>)}
           </div>}
 
-          {active === "access" && <div className="panel project-panel">
+          {active === "access" && false && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Utilisateurs et accès · Aéro Service TEST</h3><p>Comptes, profils métier, inscriptions et rôles réels. Les modifications d’accès restent protégées tant que leurs workflows ne sont pas validés.</p></div><Status tone="good">Lecture réelle</Status></div>
             <form className="module-panel" onSubmit={submitRegistrationReview}>
               <h3>Examiner une inscription et activer un apprenant</h3>
