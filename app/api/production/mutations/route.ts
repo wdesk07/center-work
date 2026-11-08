@@ -73,7 +73,9 @@ export async function POST(request: Request) {
   });
   const { data: ownerProfile, error: profileError } = await production
     .from("profiles").select("id,status,email").eq("email", "wdesk87@gmail.com").maybeSingle();
-  const { data: authenticatedUser, error: authenticatedUserError } = await wdesk.auth.getUser(accessToken);\n  if (authenticatedUserError || !authenticatedUser.user || authenticatedUser.user.id !== ownerProfile?.id || String(authenticatedUser.user.email ?? "").toLowerCase() !== "wdesk87@gmail.com") return fail("primary_owner_authentication_not_verified", 403);\n  if (profileError || !ownerProfile || ownerProfile.status !== "active") return fail("production_owner_profile_not_verified", 403);
+  const { data: authenticatedUser, error: authenticatedUserError } = await wdesk.auth.getUser(accessToken);
+  if (authenticatedUserError || !authenticatedUser.user || authenticatedUser.user.id !== ownerProfile?.id || String(authenticatedUser.user.email ?? "").toLowerCase() !== "wdesk87@gmail.com") return fail("primary_owner_authentication_not_verified", 403);
+  if (profileError || !ownerProfile || ownerProfile.status !== "active") return fail("production_owner_profile_not_verified", 403);
 
   const { data: assignments, error: assignmentsError } = await production
     .from("user_roles").select("role_id").eq("user_id", ownerProfile.id);
