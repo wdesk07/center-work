@@ -25,7 +25,7 @@ export default function ProductionOperations({inventory,onRefresh}:Props){
  }
  const I="command-input",L="command-label",B="primary-button";
  return <section className="owner-operations">
- <div className="section-title"><div><h2>Commandes propriétaires · PRODUCTION</h2><p>Écritures limitées et auditées après vérification du propriétaire dans TEST et PROD.</p></div><button className="subtle-button" disabled={busy} onClick={()=>void onRefresh()}>Actualiser <RefreshCw size={15}/></button></div>
+ <div className="section-title"><div><h2>Commandes propriétaires · PRODUCTION</h2><p>Écritures limitées et auditées après vérification du propriétaire dans Aéro Service PRODUCTION uniquement.</p></div><button className="subtle-button" disabled={busy} onClick={()=>void onRefresh()}>Actualiser <RefreshCw size={15}/></button></div>
  <div className="notice"><ShieldCheck size={17}/>Formations, groupes, emplois du temps, suspensions et règles de pénalité sont disponibles. Pointages, paiements et comptes restent verrouillés en attendant leurs contrôles métier dédiés.</div>
  <div className="module-panel"><h3>Formations PRODUCTION</h3>
  <form onSubmit={e=>{e.preventDefault();void send("formation_upsert",{target_id:fid||null,...f},fid?"Formation modifiée.":"Formation créée.");}}>
