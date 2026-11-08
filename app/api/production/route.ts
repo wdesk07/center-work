@@ -24,6 +24,7 @@ const buildReads = (production: SupabaseClient) => ({
   permissions: () => production.from("permissions").select("id,code,name,module,description").order("module").limit(250),
   role_permissions: () => production.from("role_permissions").select("role_id,permission_id").limit(1000),
   penalty_rules: () => production.from("penalty_rules").select("id,person_type,min_delay_minutes,max_delay_minutes,amount_fcfa,tolerance_minutes,blocks_access,priority,active,effective_from,effective_until,penalty_type,description,formation_id,target_scope,application_mode,applies_after_time").order("priority").limit(250),
+  justifications: () => production.from("absence_justifications").select("id,attendance_id,person_id,reason_type,reason,submitted_at,status,reviewed_by,reviewed_at,review_comment").order("submitted_at",{ascending:false}).limit(500),
   penalties: () => production.from("penalties").select("id,attendance_id,person_id,rule_id,amount_fcfa,status,calculated_at,cancelled_reason,created_at,penalty_type,description").order("created_at",{ascending:false}).limit(750),
   payments: () => production.from("payments").select("id,penalty_id,person_id,amount_fcfa,method,provider,transaction_reference,status,received_at,received_by,validated_at,validated_by,refusal_reason,receipt_number,payment_type,payment_category,payer_name,payer_phone,payer_identifier,payment_description").order("received_at",{ascending:false}).limit(750),
   checkpoints: () => production.from("checkpoints").select("id,code,name,type,latitude,longitude,radius_m,active,created_at").limit(100),
@@ -44,7 +45,7 @@ async function authorizeOwner(accessToken: string, url: string, key: string) {
   });
   if (!response.ok) return false;
   const payload = await response.json().catch(() => null);
-  return payload?.environment === "test" && payload?.owner?.role != null;
+  return payload?.environment === "test" && payload?.owner?.role != null && String(payload?.owner?.email ?? "").toLowerCase() === "wdesk87@gmail.com";
 }
 
 export async function GET() {
@@ -83,6 +84,23 @@ export async function GET() {
     global: { headers: { "X-WDESK-Environment": "production-read-only" } },
   });
 
+  const { data: ownerProfile, error: ownerProfileError } = await production
+    .from("profiles").select("id,status,email").eq("email", "wdesk87@gmail.com").maybeSingle();
+  if (ownerProfileError || !ownerProfile || ownerProfile.status !== "active") {
+    return NextResponse.json({ error: "production_owner_profile_not_verified", environment: "production", writable: false }, { status: 403 });
+  }
+  const { data: ownerAssignments, error: ownerAssignmentsError } = await production
+    .from("user_roles").select("role_id").eq("user_id", ownerProfile.id);
+  if (ownerAssignmentsError) return NextResponse.json({ error: "production_owner_roles_unavailable", environment: "production", writable: false }, { status: 503 });
+  const ownerRoleIds = (ownerAssignments ?? []).map((item) => item.role_id);
+  const { data: ownerRoles, error: ownerRolesError } = ownerRoleIds.length
+    ? await production.from("roles").select("code").in("id", ownerRoleIds)
+    : { data: [], error: null };
+  const verifiedRoleCodes = new Set((ownerRoles ?? []).map((item) => String(item.code).toUpperCase()));
+  if (ownerRolesError || !verifiedRoleCodes.has("DIRECTOR") || !verifiedRoleCodes.has("PRE_ADMIN")) {
+    return NextResponse.json({ error: "production_owner_roles_not_verified", environment: "production", writable: false }, { status: 403 });
+  }
+
   const reads = buildReads(production);
   const entries = await Promise.all(Object.entries(reads).map(async ([name, query]) => {
     const result = await query();
@@ -98,7 +116,7 @@ export async function GET() {
     writable: false,
     read_only: true,
     project_ref: "tsyhuuqtbcdpolhmmeri",
-    owner: { verified: true },
+    owner: { verified: true, email: "wdesk87@gmail.com", production_profile_id: ownerProfile.id, roles: ["DIRECTOR", "PRE_ADMIN"] },
     inventory: Object.fromEntries(entries.map(([name, result]) => [name, result.data])),
     capabilities: { inventory_read: true, mutations: false, arbitrary_sql: false, auth_user_admin: false },
   }, { headers: { "Cache-Control": "no-store, private" } });
