@@ -35,7 +35,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 ];
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
-  overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
+  overview: { title: "Vue générale WDESK", intro: "Supervision du centre WDESK et de son plan de contrôle TEST ; les données métier Aéro Service sont consultées séparément en PRODUCTION." },
   production: { title: "Aéro Service PRODUCTION", intro: "Consultation et commandes propriétaires contrôlées, directement sur la base réelle de production." },
   aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes QR depuis Aéro Service PRODUCTION." },
   diagnostics: { title: "Présences", intro: "Suivi des pointages, retards, régularisations et justifications depuis Aéro Service PRODUCTION." },
@@ -46,8 +46,8 @@ const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   hosting: { title: "QR et synchronisation", intro: "Demandes QR, décisions et état des appareils depuis Aéro Service PRODUCTION." },
   github: { title: "Maintenance", intro: "État des composants, incidents, dépendances techniques et accès aux consoles de diagnostic." },
   access: { title: "Utilisateurs", intro: "Recherche des comptes, profils, apprenants, collaborateurs, inscriptions et rôles en PRODUCTION." },
-  audit: { title: "Sécurité et historique", intro: "Événements d’audit, décisions, acteurs, motifs et résultats des interventions." },
-  settings: { title: "Paramètres généraux", intro: "Connexions, périmètres TEST/PROD, autorisations et réglages de sécurité du centre." },
+  audit: { title: "Sécurité et historique WDESK", intro: "Journal du plan de contrôle WDESK TEST ; le journal métier Aéro Service PRODUCTION est consulté dans les rubriques PRODUCTION." },
+  settings: { title: "Paramètres généraux WDESK", intro: "Connexions et réglages du plan de contrôle WDESK TEST, distincts de la base métier Aéro Service PRODUCTION." },
 };
 
 function Status({ children, tone = "muted" }: { children: React.ReactNode; tone?: string }) {
@@ -382,8 +382,7 @@ export default function Home() {
     const aeroModules: ModuleKey[] = ["production", "aero", "diagnostics", "projects", "ownerOps", "commands", "supabase", "hosting", "access"];
     if (aeroModules.includes(key)) { void loadProductionInventory(); return; }
     // WDESK workspace/security records remain on the WDESK TEST control plane.
-    if (key === "audit" || key === "settings") return;
-    if (key !== "overview" && !inventory) void loadCommandInventory(false);
+    // Never load the legacy Aéro Service TEST inventory from navigation.
   }
 
   const platformCounts = {
@@ -413,10 +412,10 @@ export default function Home() {
 
           {active === "overview" && <>
             <div className="welcome-banner"><div className="welcome-icon"><Gauge size={24}/></div><div><span>ESPACE PROPRIÉTAIRE</span><h2>Un centre unique pour vos infrastructures.</h2><p>Les statuts reflètent les données réellement retournées par l’API du centre.</p></div><div className="banner-orb orb-one"/><div className="banner-orb orb-two"/></div>
-            <div className="section-title"><div><h2>Surveillance opérationnelle</h2><p>Les premiers contrôles automatiques sont actifs sur Aéro Service TEST.</p></div><button className="subtle-button" onClick={() => choose("diagnostics")}>Ouvrir les diagnostics <ArrowUpRight size={15}/></button></div>
+            <div className="section-title"><div><h2>Surveillance du plan de contrôle WDESK · TEST</h2><p>Ces indicateurs concernent le backend de supervision WDESK, pas les données métier Aéro Service PRODUCTION.</p></div><button className="subtle-button" onClick={() => choose("diagnostics")}>Ouvrir les diagnostics <ArrowUpRight size={15}/></button></div>
             <div className="stats-grid">
-              <article className="stat-card"><div className="stat-top"><span>Alertes à examiner</span><Activity size={18}/></div><strong>{diagnostics ? diagnostics.checks.filter(x => x.count > 0).length : "…"}</strong><small>Files d’attente ou échecs détectés en TEST</small></article>
-              <article className="stat-card"><div className="stat-top"><span>Pointages aujourd’hui</span><ClipboardList size={18}/></div><strong>{diagnostics ? diagnostics.daily_attendance_records_today : "…"}</strong><small>Enregistrements journaliers · TEST</small></article>
+              <article className="stat-card"><div className="stat-top"><span>Alertes WDESK TEST</span><Activity size={18}/></div><strong>{diagnostics ? diagnostics.checks.filter(x => x.count > 0).length : "…"}</strong><small>Files et erreurs du plan de contrôle WDESK TEST</small></article>
+              <article className="stat-card"><div className="stat-top"><span>Pointages aujourd’hui</span><ClipboardList size={18}/></div><strong>{diagnostics ? diagnostics.daily_attendance_records_today : "…"}</strong><small>Indicateur renvoyé par le plan de contrôle WDESK TEST</small></article>
             </div>
             <div className="section-title"><div><h2>État des infrastructures</h2><p>{loading ? "Lecture du registre…" : `${projects.length} élément(s) dans le registre sécurisé`}</p></div><button className="subtle-button" onClick={() => void refresh()}>Actualiser <RefreshCw size={15}/></button></div>
             <div className="stats-grid">
