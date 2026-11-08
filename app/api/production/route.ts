@@ -38,17 +38,6 @@ const buildReads = (production: SupabaseClient) => ({
   audit_logs: () => production.from("audit_logs").select("id,actor_id,action,module,entity_type,entity_id,old_values,new_values,created_at,visibility").order("created_at",{ascending:false}).limit(1000),
 });
 
-async function authorizeOwner(accessToken: string, url: string, key: string) {
-  const response = await fetch(`${url}/functions/v1/wdesk-owner-commands`, {
-    method: "GET",
-    headers: { apikey: key, Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-  });
-  if (!response.ok) return false;
-  const payload = await response.json().catch(() => null);
-  return payload?.environment === "test" && payload?.owner?.role != null && String(payload?.owner?.email ?? "").toLowerCase() === "wdesk87@gmail.com";
-}
-
 export async function GET() {
   const wdeskUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const wdeskKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
