@@ -20,11 +20,11 @@ type Dashboard = { owner?: { email: string; display_name: string; role: string }
 
 const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[] = [
   { key: "overview", label: "Vue générale", icon: Gauge, group: "ESPACE DE TRAVAIL" },
-  { key: "production", label: "Aéro Service PRODUCTION", icon: Database, group: "AÉRO SERVICE" },
+  { key: "production", label: "Inventaire PRODUCTION", icon: Database, group: "AÉRO SERVICE" },
   { key: "aero", label: "Borne de présence", icon: ClipboardList, group: "AÉRO SERVICE" },
   { key: "diagnostics", label: "Présences", icon: Activity, group: "AÉRO SERVICE" },
   { key: "projects", label: "Formations et groupes", icon: Blocks, group: "AÉRO SERVICE" },
-  { key: "ownerOps", label: "Commandes propriétaires", icon: ShieldCheck, group: "AÉRO SERVICE" },
+  { key: "ownerOps", label: "Commandes propriétaires · PROD", icon: ShieldCheck, group: "AÉRO SERVICE" },
   { key: "commands", label: "Personnel et Direction", icon: LockKeyhole, group: "AÉRO SERVICE" },
   { key: "supabase", label: "Finances et pénalités", icon: Database, group: "AÉRO SERVICE" },
   { key: "hosting", label: "QR et synchronisation", icon: Cloud, group: "AÉRO SERVICE" },
@@ -40,7 +40,7 @@ const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes de contrôle QR depuis Aéro Service TEST." },
   diagnostics: { title: "Présences", intro: "Suivi des pointages journaliers et par séance, retards, régularisations, justifications et anomalies de synchronisation." },
   projects: { title: "Formations et groupes", intro: "Catalogue des formations, groupes, inscriptions et associations apprenants depuis la base TEST." },
-  ownerOps: { title: "Commandes propriétaires", intro: "Gestion contrôlée des formations, groupes, emplois du temps, présences, cours, pénalités, comptes et rôles dans TEST." },
+  ownerOps: { title: "Commandes propriétaires · PRODUCTION", intro: "Gestion contrôlée des formations, groupes, emplois du temps, présences, cours, pénalités, comptes et rôles dans la base Aéro Service PRODUCTION." },
   commands: { title: "Personnel et Direction", intro: "Dossiers des collaborateurs, rôles et interventions propriétaires contrôlées dans l’environnement TEST." },
   supabase: { title: "Finances et pénalités", intro: "Consultation des pénalités, règles, paiements, reçus et soldes à partir des enregistrements TEST." },
   hosting: { title: "QR et synchronisation", intro: "Demandes QR, décisions, événements hors ligne et état de synchronisation des présences." },
@@ -379,7 +379,7 @@ export default function Home() {
 
   function choose(key: ModuleKey) {
     setActive(key); setMobileOpen(false); setNotice("");
-    if (key === "production") { void loadProductionInventory(); return; }
+    if (key === "production" || key === "ownerOps") { void loadProductionInventory(); return; }
     if (key !== "overview" && !inventory) void loadCommandInventory(false);
   }
 
@@ -537,7 +537,7 @@ export default function Home() {
             </> : <div className="empty-state">Charge l’inventaire TEST.</div>}
           </div>}
 
-          {active === "ownerOps" && (inventory ? <OwnerOperations inventory={inventory} onRefresh={() => loadCommandInventory(false)} onNotice={setNotice} /> : <div className="empty-state">Chargement de l’inventaire TEST…</div>)}
+          {active === "ownerOps" && <div className="panel project-panel"><div className="panel-heading"><div><h3>Commandes propriétaires · AÉRO SERVICE PRODUCTION</h3><p>Base Supabase tsyhuuqtbcdpolhmmeri. Toutes les listes et écritures passent par les routes serveur PROD dédiées ; aucun repli vers TEST.</p></div><Status tone={productionInventory ? "good" : "warn"}>{productionInventory ? "PRODUCTION connectée" : "PRODUCTION non chargée"}</Status><button className="subtle-button" disabled={productionLoading} onClick={() => void loadProductionInventory()}>{productionLoading ? "Lecture…" : "Actualiser"} <RefreshCw size={15}/></button></div>{productionLoading && <div className="empty-state">Chargement de l’inventaire PRODUCTION…</div>}{productionError && <div className="notice"><Activity size={17}/>{productionError}</div>}{productionInventory && <><ProductionOperations inventory={productionInventory} onRefresh={loadProductionInventory}/><ProductionGovernance inventory={productionInventory} onRefresh={loadProductionInventory}/></>}{!productionInventory && !productionLoading && !productionError && <div className="empty-state">Aucune donnée PRODUCTION chargée. Actualise pour charger exclusivement la base PROD.</div>}</div>}
 
           {active === "commands" && <div className="panel project-panel">
             <div className="panel-heading"><div><h3>Personnel et Direction · TEST</h3><p>Fiches collaborateurs, formateurs et rôles sont rapprochés par identifiant de profil.</p></div><button className="subtle-button" onClick={() => void loadCommandInventory()}>Actualiser <RefreshCw size={15}/></button></div>
