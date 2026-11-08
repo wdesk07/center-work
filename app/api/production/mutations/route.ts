@@ -162,7 +162,7 @@ export async function POST(request: Request) {
       target_email: expectedEmail,
       registrations_deleted: prepared?.registrations_deleted ?? 0,
       auth_user_deleted: true,
-      audit_warning: Boolean(auditUpdate.error),
+      audit_warning: Boolean(auditUpdate.error || !auditUpdate.data),
       request_id: body.request_id,
       environment: "production",
       writable: true,
