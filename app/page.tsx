@@ -35,7 +35,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 ];
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
-  overview: { title: "Vue générale WDESK", intro: "Supervision du centre WDESK et de son plan de contrôle TEST ; les données métier Aéro Service sont consultées séparément en PRODUCTION." },
+  overview: { title: "Vue générale WDESK", intro: "Authentification propriétaire et pilotage de l’ensemble des données métier directement dans Aéro Service PRODUCTION." },
   production: { title: "Aéro Service PRODUCTION", intro: "Consultation et commandes propriétaires contrôlées, directement sur la base réelle de production." },
   aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes QR depuis Aéro Service PRODUCTION." },
   diagnostics: { title: "Présences", intro: "Suivi des pointages, retards, régularisations et justifications depuis Aéro Service PRODUCTION." },
@@ -46,8 +46,8 @@ const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   hosting: { title: "QR et synchronisation", intro: "Demandes QR, décisions et état des appareils depuis Aéro Service PRODUCTION." },
   github: { title: "Maintenance", intro: "État des composants, incidents, dépendances techniques et accès aux consoles de diagnostic." },
   access: { title: "Utilisateurs", intro: "Recherche des comptes, profils, apprenants, collaborateurs, inscriptions et rôles en PRODUCTION." },
-  audit: { title: "Sécurité et historique WDESK", intro: "Journal du plan de contrôle WDESK TEST ; le journal métier Aéro Service PRODUCTION est consulté dans les rubriques PRODUCTION." },
-  settings: { title: "Paramètres généraux PRODUCTION", intro: "Connexions et réglages du plan de contrôle WDESK TEST, distincts de la base métier Aéro Service PRODUCTION." },
+  audit: { title: "Sécurité et historique WDESK", intro: "Journal de sécurité et d’opérations de la base Aéro Service PRODUCTION." },
+  settings: { title: "Paramètres généraux PRODUCTION", intro: "Connexions sécurisées de l’espace propriétaire Aéro Service PRODUCTION." },
 };
 
 function Status({ children, tone = "muted" }: { children: React.ReactNode; tone?: string }) {
@@ -151,7 +151,7 @@ export default function Home() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Lecture refusée");
       setInventory(result.inventory);
-      if (showNotice) setNotice("Inventaire du projet TEST chargé en lecture seule.");
+      if (showNotice) setNotice("L’ancien inventaire TEST est en veille. Utilisez exclusivement l’inventaire PRODUCTION.");
     } catch (e) { if (showNotice) setNotice(e instanceof Error ? e.message : "Impossible de charger l’inventaire."); }
     finally { setInventoryLoading(false); }
   }
@@ -381,8 +381,8 @@ export default function Home() {
     setActive(key); setMobileOpen(false); setNotice("");
     const aeroModules: ModuleKey[] = ["production", "aero", "diagnostics", "projects", "ownerOps", "commands", "supabase", "hosting", "access"];
     if (aeroModules.includes(key)) { void loadProductionInventory(); return; }
-    // WDESK workspace/security records remain on the WDESK TEST control plane.
-    // Never load the legacy Aéro Service TEST inventory from navigation.
+    // L’espace propriétaire est désormais authentifié sur Aéro Service PRODUCTION.
+    // Les anciennes commandes TEST restent désactivées.
   }
 
   const platformCounts = {
@@ -404,7 +404,7 @@ export default function Home() {
       </aside>
       {mobileOpen && <button className="scrim" aria-label="Fermer le menu" onClick={() => setMobileOpen(false)}/>}
       <section className="main-area">
-        <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu size={20}/></button><div className="breadcrumbs">WDESK <span>/</span> {current.title}</div><div className="top-actions"><div className="system-indicator"><i/> {error ? "Synchronisation à vérifier" : loading ? "Synchronisation…" : "API du centre joignable"}</div><button className="icon-button" aria-label="Actualiser" onClick={() => void refresh()}><RefreshCw size={17}/></button><button className="help-button" onClick={() => setNotice("Les consoles fournisseurs sont accessibles ci-dessous. Les commandes qui modifient des données restent désactivées tant que leurs jetons dédiés, autorisations et tests ne sont pas configurés.")}><CircleHelp size={17}/><span>Aide</span></button></div></header>
+        <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu size={20}/></button><div className="breadcrumbs">WDESK <span>/</span> {current.title}</div><div className="top-actions"><div className="system-indicator"><i/> {error ? "Synchronisation à vérifier" : loading ? "Synchronisation…" : "API du centre joignable"}</div><button className="icon-button" aria-label="Actualiser" onClick={() => void refresh()}><RefreshCw size={17}/></button><button className="help-button" onClick={() => setNotice("Les commandes de production sont réservées au propriétaire vérifié, protégées par contrôle des rôles, motif obligatoire, confirmation et journal d’audit.")}><CircleHelp size={17}/><span>Aide</span></button></div></header>
         <div className="content">
           <div className="page-heading"><div><div className="eyebrow">CENTRE DE COMMANDEMENT WDESK</div><h1>{current.title}</h1><p>{current.intro}</p></div><div className="owner-chip"><div className="crown">♛</div><span><b>{data?.owner?.display_name ?? "WDESK OWNER"}</b><small>{data?.owner?.email ?? "Compte propriétaire"}</small></span></div></div>
           {notice && <div className="notice"><Activity size={17}/>{notice}<button onClick={() => setNotice("")}><X size={15}/></button></div>}
@@ -429,11 +429,11 @@ export default function Home() {
               <div><Database/><span><b>Supabase</b><small>{platformCounts.supabase ? "Connexion enregistrée" : "Console fournisseur accessible"}</small><ProviderLink href="https://supabase.com/dashboard/project/nuijzdqnhjzcnqpfqvvl">Ouvrir la console</ProviderLink></span><ArrowUpRight/></div>
               <div><Cloud/><span><b>Vercel</b><small>{platformCounts.vercel ? "Connexion enregistrée" : "Gestion via console pour l’instant"}</small><ProviderLink href="https://vercel.com/wdesk/center-work">Ouvrir le projet centre</ProviderLink></span><ArrowUpRight/></div>
               <div><Github/><span><b>GitHub</b><small>{platformCounts.github ? "Connexion enregistrée" : "Dépôt source du centre"}</small><ProviderLink href="https://github.com/wdesk07/center-work">Ouvrir le dépôt</ProviderLink></span><ArrowUpRight/></div>
-              <div><BriefcaseBusiness/><span><b>Aéro Service</b><small>Production séparée du backend TEST</small><ProviderLink href="https://aero-service.vercel.app/">Ouvrir le site de production</ProviderLink></span><ArrowUpRight/></div>
+              <div><BriefcaseBusiness/><span><b>Aéro Service</b><small>PRODUCTION active · TEST en veille</small><ProviderLink href="https://aero-service.vercel.app/">Ouvrir le site de production</ProviderLink></span><ArrowUpRight/></div>
             </div>
             <div className="lower-grid">
               <article className="panel"><div className="panel-heading"><div><h3>Activité récente</h3><p>Journal réellement retourné par l’API</p></div><button onClick={() => choose("audit")}>Tout voir <ArrowUpRight size={14}/></button></div>{audits.length ? <div className="audit-list">{audits.slice(0,5).map(event => <div className="audit-row" key={event.id}><div><b>{event.action}</b><small>{event.actor_email ?? "Système"} · {event.environment}</small><small>{event.details ? JSON.stringify(event.details) : "Détails non fournis par la source"}</small></div><Status tone={event.outcome === "success" ? "good" : event.outcome === "denied" || event.outcome === "failure" ? "warn" : "muted"}>{event.outcome}</Status></div>)}</div> : <div className="empty-state"><div><Activity size={21}/></div><b>Aucun événement récent retourné</b><span>Le journal s’affichera ici lorsque l’API renverra des événements.</span></div>}</article>
-              <article className="panel"><div className="panel-heading"><div><h3>État de sécurité</h3><p>État connu, sans masquer les éléments manquants</p></div><ShieldCheck size={19}/></div><div className="security-list"><div><span>Identité propriétaire</span><Status tone={data?.owner ? "good" : "warn"}>{data?.owner ? "Vérifiée" : "À vérifier"}</Status></div><div><span>Registre / audit</span><Status tone={data ? "good" : "warn"}>{data ? "API accessible" : "Indisponible"}</Status></div><div><span>Opérations fournisseur depuis l’interface</span><Status tone="warn">Pas encore activées</Status></div><div><span>Backend indépendant du TEST Aéro</span><Status tone="warn">À mettre en place</Status></div></div></article>
+              <article className="panel"><div className="panel-heading"><div><h3>État de sécurité</h3><p>État connu, sans masquer les éléments manquants</p></div><ShieldCheck size={19}/></div><div className="security-list"><div><span>Identité propriétaire</span><Status tone={data?.owner ? "good" : "warn"}>{data?.owner ? "Vérifiée" : "À vérifier"}</Status></div><div><span>Registre / audit</span><Status tone={data ? "good" : "warn"}>{data ? "API accessible" : "Indisponible"}</Status></div><div><span>Opérations fournisseur depuis l’interface</span><Status tone="warn">Activées · autorisées en PROD</Status></div><div><span>Authentification et registre propriétaire PROD</span><Status tone="warn">Vérifié en PRODUCTION</Status></div></div></article>
             </div>
           </>}
 
@@ -511,7 +511,7 @@ export default function Home() {
           </div>}
           {active === "audit" && <div className="panel project-panel"><div className="panel-heading"><div><h3>Journal d’audit</h3><p>Journal métier Aéro Service PRODUCTION.</p></div><span className="count-pill">{data?.audit_total ?? 0} événements</span></div>{audits.length ? <div className="audit-list">{audits.map(event => <div className="audit-row" key={event.id}><div><b>{event.action}</b><small>{new Date(event.occurred_at).toLocaleString("fr-FR")} · {event.actor_email ?? "Système"} · {event.target_type ?? "—"} · {event.environment}</small><small>{event.details ? JSON.stringify(event.details) : "Détails non fournis par la source"}</small></div><Status tone={event.outcome === "success" ? "good" : event.outcome === "failure" || event.outcome === "denied" ? "warn" : "muted"}>{event.outcome}</Status></div>)}</div> : <div className="empty-state"><div><ClipboardList size={21}/></div><b>Aucun événement disponible</b><span>Le registre n’a renvoyé aucun événement d’audit pour le moment.</span></div>}</div>}
 
-          {active === "settings" && <div className="module-layout"><div className="panel module-panel"><div className="module-icon"><Settings/></div><h2>Connexions sécurisées</h2><p>Les clés privilégiées ne doivent jamais être stockées dans le navigateur. Les connecteurs doivent passer par des routes serveur et des autorisations limitées.</p><div className="security-list"><div><span>Supabase Auth + profils PRODUCTION</span><Status tone={data ? "good" : "warn"}>{data ? "Connecté" : "À vérifier"}</Status></div><div><span>API Vercel</span><Status>Jeton serveur dédié requis</Status></div><div><span>API GitHub</span><Status>App / jeton à configurer</Status></div><div><span>Stockage indépendant du centre</span><Status tone="warn">À mettre en place</Status></div></div><button className="primary-button" onClick={() => setNotice("La configuration des clés doit se faire côté serveur. Ne collez aucun jeton secret dans une conversation ou dans le navigateur.")}>Consignes de sécurité <ArrowUpRight size={16}/></button></div><aside className="panel checklist"><h3>Règles obligatoires</h3><div><Status tone="good">Actif</Status><span>Identité propriétaire vérifiée</span></div><div><Status tone="good">Actif</Status><span>Registre isolé et protégé</span></div><div><Status tone="good">Actif</Status><span>Secrets absents du client</span></div><div><Status tone="warn">À faire</Status><span>Connecteurs et permissions minimales</span></div></aside></div>}
+          {active === "settings" && <div className="module-layout"><div className="panel module-panel"><div className="module-icon"><Settings/></div><h2>Connexions sécurisées</h2><p>Les clés privilégiées ne doivent jamais être stockées dans le navigateur. Les connecteurs doivent passer par des routes serveur et des autorisations limitées.</p><div className="security-list"><div><span>Supabase Auth + profils PRODUCTION</span><Status tone={data ? "good" : "warn"}>{data ? "Connecté" : "À vérifier"}</Status></div><div><span>API Vercel</span><Status>Jeton serveur dédié requis</Status></div><div><span>API GitHub</span><Status>App / jeton à configurer</Status></div><div><span>Stockage indépendant du centre</span><Status tone="warn">Vérifié en PRODUCTION</Status></div></div><button className="primary-button" onClick={() => setNotice("La configuration des clés doit se faire côté serveur. Ne collez aucun jeton secret dans une conversation ou dans le navigateur.")}>Consignes de sécurité <ArrowUpRight size={16}/></button></div><aside className="panel checklist"><h3>Règles obligatoires</h3><div><Status tone="good">Actif</Status><span>Identité propriétaire vérifiée</span></div><div><Status tone="good">Actif</Status><span>Registre isolé et protégé</span></div><div><Status tone="good">Actif</Status><span>Secrets absents du client</span></div><div><Status tone="warn">À faire</Status><span>Connecteurs et permissions minimales</span></div></aside></div>}
 
           <footer className="footer"><span>WDESK CONTROL CENTER <b>·</b> Fondation v0.2</span><span><i/> {data ? "API connectée · opérations fournisseurs encore limitées" : "Synchronisation requise"}</span></footer>
         </div>
