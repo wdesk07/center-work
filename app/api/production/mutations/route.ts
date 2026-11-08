@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     const lastName = String(body.payload.last_name ?? "").trim();
     const phone = String(body.payload.phone ?? "").trim();
     const roleId = String(body.payload.role_id ?? "");
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || !firstName || !lastName || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(roleId)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !firstName || !lastName || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(roleId)) {
       return fail("valid_email_name_and_role_required", 400);
     }
     const { data: role, error: roleError } = await production.from("roles").select("id,code").eq("id", roleId).maybeSingle();
