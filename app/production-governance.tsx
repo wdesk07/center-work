@@ -12,7 +12,8 @@ export default function ProductionGovernance({inventory,onRefresh}:Props){
  const [profileId,setProfileId]=useState(""),[profileStatus,setProfileStatus]=useState("active"),[roleId,setRoleId]=useState(""),[deleteConfirmation,setDeleteConfirmation]=useState("");
  const [profileFirst,setProfileFirst]=useState(""),[profileLast,setProfileLast]=useState(""),[profileDisplay,setProfileDisplay]=useState(""),[profilePhone,setProfilePhone]=useState(""),[profileWhatsapp,setProfileWhatsapp]=useState(""),[profileAddress,setProfileAddress]=useState("");
  const [inviteEmail,setInviteEmail]=useState(""),[inviteFirst,setInviteFirst]=useState(""),[inviteLast,setInviteLast]=useState(""),[invitePhone,setInvitePhone]=useState(""),[inviteRole,setInviteRole]=useState("");
- const isStudent=(id:string)=>(inventory.students??[]).some((x:any)=>x.id===id);\n const selectedProfile=(inventory.profiles??[]).find((x:any)=>x.id===profileId);
+ const isStudent=(id:string)=>(inventory.students??[]).some((x:any)=>x.id===id);
+ const selectedProfile=(inventory.profiles??[]).find((x:any)=>x.id===profileId);
  const profileName=(id:string)=>{const p=(inventory.profiles??[]).find((x:any)=>x.id===id);return p?.display_name||[p?.first_name,p?.last_name].filter(Boolean).join(" ")||p?.email||id;};
  async function send(action:string,payload:Record<string,unknown>,success:string){
   if(reason.trim().length<8){setMessage("Le motif doit contenir au moins 8 caractères. Choisis un exemple ou explique librement la raison.");return;}if(confirmation.trim()!=="CONFIRMER"){setMessage("Dans Confirmation, saisis CONFIRMER. Les espaces avant ou après sont ignorés.");return;}
