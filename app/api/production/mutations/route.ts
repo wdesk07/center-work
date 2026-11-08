@@ -13,6 +13,14 @@ const allowedActions = new Set([
   "course_suspension_create",
   "course_suspension_revoke",
   "penalty_rule_upsert",
+  "attendance_correct",
+  "justification_review",
+  "qr_request_review",
+  "payment_review",
+  "profile_status_update",
+  "user_role_assign",
+  "user_role_revoke",
+  "account_invite",
 ]);
 
 function fail(error: string, status: number) {
@@ -79,6 +87,35 @@ export async function POST(request: Request) {
     : { data: [], error: null };
   const roleCodes = new Set((roles ?? []).map((item) => String(item.code).toUpperCase()));
   if (rolesError || !roleCodes.has("DIRECTOR") || !roleCodes.has("PRE_ADMIN")) return fail("production_owner_roles_not_verified", 403);
+
+
+  if (body.action === "account_invite") {
+    const email = String(body.payload.email ?? "").trim().toLowerCase();
+    const firstName = String(body.payload.first_name ?? "").trim();
+    const lastName = String(body.payload.last_name ?? "").trim();
+    const phone = String(body.payload.phone ?? "").trim();
+    const roleId = String(body.payload.role_id ?? "");
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || !firstName || !lastName || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(roleId)) {
+      return fail("valid_email_name_and_role_required", 400);
+    }
+    const { data: role, error: roleError } = await production.from("roles").select("id,code").eq("id", roleId).maybeSingle();
+    if (roleError || !role || ["DIRECTOR", "PRE_ADMIN"].includes(String(role.code).toUpperCase())) return fail("standard_role_required_for_invitation", 400);
+    const { data: invited, error: inviteError } = await production.auth.admin.inviteUserByEmail(email, {
+      data: { first_name: firstName, last_name: lastName, display_name: [firstName, lastName].join(" "), phone: phone || null },
+    });
+    if (inviteError || !invited.user) return fail(String(inviteError?.message ?? "account_invitation_failed").slice(0, 200), 422);
+    const { data: assigned, error: assignError } = await production.rpc("wdesk_owner_production_mutation", {
+      p_actor_id: ownerProfile.id,
+      p_action: "user_role_assign",
+      p_payload: { target_id: invited.user.id, role_id: roleId },
+      p_reason: body.reason.trim(),
+      p_request_id: body.request_id,
+    });
+    if (assignError) {
+      return NextResponse.json({ error: "account_created_role_assignment_pending", user_id: invited.user.id, email, detail: String(assignError.message).slice(0, 160), environment: "production", writable: true }, { status: 202, headers: { "Cache-Control": "no-store, private" } });
+    }
+    return NextResponse.json({ ok: true, action: "account_invite", user_id: invited.user.id, email, role: role.code, assignment: assigned, environment: "production", writable: true }, { headers: { "Cache-Control": "no-store, private" } });
+  }
 
   const { data, error } = await production.rpc("wdesk_owner_production_mutation", {
     p_actor_id: ownerProfile.id,
