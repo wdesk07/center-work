@@ -102,7 +102,7 @@ begin
     'wdesk_production',
     'student',
     p_target_id,
-    jsonb_build_object('profile',to_jsonb(v_profile),'registrations_count',v_registration_count),
+    jsonb_build_object('profile_id',v_profile.id,'email',v_profile.email,'status',v_profile.status,'registrations_count',v_registration_count),
     jsonb_build_object(
       'request_id',p_request_id,
       'target_email',lower(trim(p_expected_email)),
