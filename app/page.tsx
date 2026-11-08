@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import OwnerOperations from "./owner-operations";
+import ProductionOperations from "./production-operations";
 import {
   Activity, ArrowUpRight, Bell, Blocks, Box, BriefcaseBusiness, ChevronDown,
   CircleHelp, Cloud, Code2, Database, Gauge, Github, LockKeyhole, Menu,
@@ -34,7 +35,7 @@ const nav: { key: ModuleKey; label: string; icon: typeof Gauge; group: string }[
 
 const descriptions: Record<ModuleKey, { title: string; intro: string }> = {
   overview: { title: "Vue générale", intro: "Vue réelle du registre WDESK et des connexions actuellement vérifiées." },
-  production: { title: "Aéro Service PRODUCTION · lecture seule", intro: "Consultation séparée des données réelles de production. Aucun formulaire ni aucune commande de modification n’est disponible dans cet espace." },
+  production: { title: "Aéro Service PRODUCTION", intro: "Consultation et commandes propriétaires contrôlées, directement sur la base réelle de production." },
   aero: { title: "Borne de présence", intro: "État des appareils, jours d’ouverture, pointages et demandes de contrôle QR depuis Aéro Service TEST." },
   diagnostics: { title: "Présences", intro: "Suivi des pointages journaliers et par séance, retards, régularisations, justifications et anomalies de synchronisation." },
   projects: { title: "Formations et groupes", intro: "Catalogue des formations, groupes, inscriptions et associations apprenants depuis la base TEST." },
@@ -434,9 +435,9 @@ export default function Home() {
           </>}
 
           {active === "production" && <div className="panel project-panel">
-            <div className="panel-heading"><div><h3>Aéro Service · PRODUCTION</h3><p>Projet Supabase <b>tsyhuuqtbcdpolhmmeri</b> · données réelles · consultation uniquement.</p></div><Status tone="warn">LECTURE SEULE</Status></div>
-            <div className="notice"><ShieldCheck size={17}/>Environnement PRODUCTION isolé. Les actions de création, modification, suppression, validation, suspension et correction sont désactivées ici. Les commandes TEST restent dans leurs modules séparés.</div>
-            <div className="section-title"><div><h2>Inventaire de production</h2><p>Chargement direct via la route serveur protégée ; aucun basculement du client Supabase TEST.</p></div><button className="subtle-button" disabled={productionLoading} onClick={() => void loadProductionInventory()}>{productionLoading ? "Lecture…" : "Actualiser la production"} <RefreshCw size={15}/></button></div>
+            <div className="panel-heading"><div><h3>Aéro Service · PRODUCTION</h3><p>Projet Supabase <b>tsyhuuqtbcdpolhmmeri</b> · données réelles · périmètre PROD isolé.</p></div><Status tone="good">PROD CONTRÔLÉE</Status></div>
+            <ProductionOperations inventory={productionInventory} onRefresh={loadProductionInventory}/>
+              <div className="section-title"><div><h2>Inventaire de production</h2><p>Chargement direct via la route serveur protégée ; aucun basculement du client Supabase TEST.</p></div><button className="subtle-button" disabled={productionLoading} onClick={() => void loadProductionInventory()}>{productionLoading ? "Lecture…" : "Actualiser la production"} <RefreshCw size={15}/></button></div>
             {productionLoading && <div className="empty-state">Lecture de l’inventaire PRODUCTION…</div>}
             {productionError && <div className="notice"><Activity size={17}/>{productionError}</div>}
             {productionInventory && <>
