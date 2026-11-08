@@ -24,7 +24,7 @@ La fonction pose temporairement l'identité vérifiée dans le contexte de trans
 - Décision sur une justification d'absence via la fonction métier existante.
 - Décision sur une demande QR via la fonction métier existante, y compris création du pointage par les déclencheurs existants.
 - Validation / refus d'un paiement en attente via les garde-fous existants ; le reçu et la régularisation sont générés par les déclencheurs de production.
-- Suspension / réactivation d'un profil et attribution / retrait de rôles standards.
+- Modification des champs de profil non sensibles (identité affichée, téléphone, WhatsApp, adresse), suspension / réactivation du profil applicatif et attribution / retrait de rôles standards.
 - Invitation d'un nouveau compte par e-mail via Supabase Auth Admin ; le profil est créé par le déclencheur existant, puis un rôle standard est attribué. Les rôles `DIRECTOR` et `PRE_ADMIN` sont exclus de l'invitation et des modifications ordinaires.
 
 Toutes les mutations exigent un motif, une confirmation explicite et un identifiant de requête. Les actions transactionnelles sont consignées dans `audit_logs` avec l'ancien et le nouvel état. Les opérations financières restent soumises aux gardes de paiement, à l'immuabilité des montants et à la validation de pénalité correspondante.
@@ -42,7 +42,7 @@ Ne jamais utiliser de préfixe `NEXT_PUBLIC_` pour la clé secrète. Ne jamais a
 - Les opérations d'attribution ou de retrait des rôles `DIRECTOR` et `PRE_ADMIN` sont volontairement verrouillées.
 - Les validations QR et financières ont été testées dans des transactions annulées ; les demandes en attente réelles étaient absentes au moment des essais.
 - Le parcours d'invitation e-mail doit encore être validé avec une adresse de test autorisée et une session propriétaire réellement connectée.
-- Les opérations de création/modification et de correction ont été testées avec rollback ; aucune donnée réelle n'a été conservée par ces tests.
+- Les opérations de création/modification, corrections, décisions de justification, QR (approbation et rejet), validation/refus de paiement, attribution/retrait de rôle et mise à jour de profil ont été testées avec rollback ; aucune donnée réelle n'a été conservée par ces tests. La fonction de décision de justification a également été alignée sur la valeur de statut `excused_absence` autorisée par la contrainte de la table `attendance`.
 
 ## Vérifications
 1. Sans variables PROD : réponse 503.
