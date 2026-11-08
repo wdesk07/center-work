@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const buildReads = (production: SupabaseClient) => ({
-  profiles: () => production.from("profiles").select("id,public_id,first_name,last_name,display_name,phone,whatsapp,email,status,created_at,updated_at").order("display_name").limit(500),
+  profiles: () => production.from("profiles").select("id,public_id,first_name,last_name,display_name,phone,whatsapp,address,email,status,created_at,updated_at").order("display_name").limit(500),
   students: () => production.from("students").select("id,student_number,formation_id,group_id,enrollment_date,education_level").limit(500),
   staff: () => production.from("staff").select("id,staff_number,department,position,hire_date,status").limit(250),
   teachers: () => production.from("teachers").select("id,teacher_number,specialization,hire_date,status").limit(250),
