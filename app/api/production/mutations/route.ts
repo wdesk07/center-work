@@ -24,6 +24,8 @@ const allowedActions = new Set([
   "account_invite",
   "student_archive",
   "student_hard_delete",
+  "kiosk_settings_update",
+  "student_assignment_update",
 ]);
 
 function fail(error: string, status: number) {
@@ -89,6 +91,43 @@ export async function POST(request: Request) {
   const roleCodes = new Set((roles ?? []).map((item) => String(item.code).toUpperCase()));
   if (rolesError || !roleCodes.has("DIRECTOR") || !roleCodes.has("PRE_ADMIN")) return fail("production_owner_roles_not_verified", 403);
 
+
+  if (body.action === "kiosk_settings_update") {
+    const opening = String(body.payload.opening_time ?? "");
+    const closing = String(body.payload.closing_time ?? "");
+    const gpsEnabled = body.payload.gps_enabled;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(opening) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(closing) || opening >= closing || typeof gpsEnabled !== "boolean") {
+      return fail("valid_kiosk_hours_and_gps_setting_required", 400);
+    }
+    const { data, error } = await production.rpc("wdesk_owner_update_kiosk_settings", {
+      p_actor_id: ownerProfile.id,
+      p_opening_time: opening,
+      p_closing_time: closing,
+      p_gps_enabled: gpsEnabled,
+      p_reason: body.reason.trim(),
+      p_request_id: body.request_id,
+    });
+    if (error) return NextResponse.json({ error: String(error.message ?? "kiosk_settings_update_failed").slice(0, 240), environment: "production", writable: true }, { status: 422, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ...data, environment: "production", writable: true }, { headers: { "Cache-Control": "no-store, private" } });
+  }
+
+  if (body.action === "student_assignment_update") {
+    const targetId = String(body.payload.target_id ?? "");
+    const formationId = String(body.payload.formation_id ?? "");
+    const groupId = body.payload.group_id == null || body.payload.group_id === "" ? null : String(body.payload.group_id);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuid.test(targetId) || !uuid.test(formationId) || (groupId !== null && !uuid.test(groupId))) return fail("valid_student_formation_and_group_required", 400);
+    const { data, error } = await production.rpc("wdesk_owner_assign_student", {
+      p_actor_id: ownerProfile.id,
+      p_target_id: targetId,
+      p_formation_id: formationId,
+      p_group_id: groupId,
+      p_reason: body.reason.trim(),
+      p_request_id: body.request_id,
+    });
+    if (error) return NextResponse.json({ error: String(error.message ?? "student_assignment_update_failed").slice(0, 240), environment: "production", writable: true }, { status: 422, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ...data, environment: "production", writable: true }, { headers: { "Cache-Control": "no-store, private" } });
+  }
 
   if (body.action === "student_archive") {
     const targetId = String(body.payload.target_id ?? "");

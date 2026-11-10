@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, ShieldCheck } from "lucide-react";
 
 type Props={inventory:Record<string,any[]>;onRefresh:()=>Promise<void>};
@@ -13,6 +13,17 @@ export default function ProductionOperations({inventory,onRefresh}:Props){
  const [fid,setFid]=useState(""),[f,setF]=useState<any>(blankF),[gid,setGid]=useState(""),[g,setG]=useState<any>(blankG);
  const [sid,setSid]=useState(""),[s,setS]=useState<any>(blankS),[rid,setRid]=useState(""),[r,setR]=useState<any>(blankR);
  const [sf,setSf]=useState(""),[sd1,setSd1]=useState(""),[sd2,setSd2]=useState(""),[sr,setSr]=useState(""),[revoke,setRevoke]=useState("");
+ const [openingTime,setOpeningTime]=useState("07:30"),[closingTime,setClosingTime]=useState("19:00"),[gpsEnabled,setGpsEnabled]=useState(false);
+ const [assignmentStudent,setAssignmentStudent]=useState(""),[assignmentFormation,setAssignmentFormation]=useState(""),[assignmentGroup,setAssignmentGroup]=useState("");
+ useEffect(()=>{
+  const settings=inventory.kiosk_settings??[];
+  const read=(key:string,fallback:string)=>{const item=settings.find((x:any)=>x.key===key);const value=item?.value;return typeof value==="string"?value.replace(/^"|"$/g,""):fallback;};
+  setOpeningTime(read("kiosk.opening_time","07:30"));
+  setClosingTime(read("kiosk.closing_time","19:00"));
+  const gpsValue=settings.find((x:any)=>x.key==="attendance.gps_enabled")?.value;
+  setGpsEnabled(gpsValue===true||gpsValue==="true");
+ },[inventory.kiosk_settings]);
+
  const days=["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
  const subjects=useMemo(()=> (inventory.subjects??[]).filter((x:any)=>x.formation_id===s.formation_id&&x.status==="active"),[inventory.subjects,s.formation_id]);
  async function send(action:string,payload:Record<string,unknown>,ok:string){
@@ -28,6 +39,31 @@ export default function ProductionOperations({inventory,onRefresh}:Props){
  <div className="section-title"><div><h2>Commandes propriétaires · PRODUCTION</h2><p>Écritures limitées et auditées après vérification du propriétaire dans Aéro Service PRODUCTION uniquement.</p></div><button className="subtle-button" disabled={busy} onClick={()=>void onRefresh()}>Actualiser <RefreshCw size={15}/></button></div>
   <div className="module-panel security-confirmation"><h3>Autorisation de l’opération</h3><p>Avant toute écriture PRODUCTION, explique librement la raison (8 caractères minimum), puis confirme. Il n’existe pas de phrase secrète : le motif est conservé dans le journal d’audit.</p><label className={L}>Exemple de motif (facultatif)<select className={I} defaultValue="" onChange={e=>{if(e.target.value)setReason(e.target.value);}}><option value="">Choisir selon l’opération…</option><option value="Correction d'un pointage après vérification">Correction d'un pointage après vérification</option><option value="Régularisation après justification validée">Régularisation après justification validée</option><option value="Validation après contrôle de présence">Validation après contrôle de présence</option><option value="Paiement vérifié et confirmé">Paiement vérifié et confirmé</option><option value="Mise à jour des informations du compte">Mise à jour des informations du compte</option><option value="Suspension pour motif administratif">Suspension pour motif administratif</option><option value="Attribution du rôle après autorisation">Attribution du rôle après autorisation</option><option value="Création après validation administrative">Création après validation administrative</option><option value="Mise à jour pédagogique validée">Mise à jour pédagogique validée</option><option value="Suspension de cours décidée par la Direction">Suspension de cours décidée par la Direction</option></select></label><label className={L}>Motif<textarea className={I} value={reason} onChange={e=>setReason(e.target.value)} maxLength={500}/></label><label className={L}>Confirmation<input className={I} value={confirmation} onChange={e=>setConfirmation(e.target.value)} placeholder="CONFIRMER"/></label>{message&&<div className="notice" role="status">{message}</div>}</div>
  <div className="notice"><ShieldCheck size={17}/>Formations, groupes, emplois du temps, suspensions et règles de pénalité sont disponibles. Pointages, paiements et comptes restent verrouillés en attendant leurs contrôles métier dédiés.</div>
+
+ <div className="module-panel"><h3>Paramètres de la borne PRODUCTION</h3>
+  <p>Ces réglages pilotent directement les fonctions de pointage de la base PRODUCTION. Fuseau horaire : Africa/Porto-Novo.</p>
+  <form onSubmit={e=>{e.preventDefault();void send("kiosk_settings_update",{opening_time:openingTime,closing_time:closingTime,gps_enabled:gpsEnabled},"Horaires et contrôle GPS de la borne enregistrés en PRODUCTION.");}}>
+   <div className="form-grid">
+    <label className={L}>Heure d’ouverture<input className={I} type="time" required value={openingTime} onChange={e=>setOpeningTime(e.target.value)}/></label>
+    <label className={L}>Heure de fermeture<input className={I} type="time" required value={closingTime} onChange={e=>setClosingTime(e.target.value)}/></label>
+    <label className={L}>Contrôle GPS<select className={I} value={gpsEnabled?"enabled":"disabled"} onChange={e=>setGpsEnabled(e.target.value==="enabled")}><option value="disabled">Désactivé — pointage sans géolocalisation</option><option value="enabled">Activé — localisation obligatoire et vérification du centre</option></select></label>
+   </div>
+   <button className={B} disabled={busy}>Enregistrer les paramètres de la borne <ShieldCheck size={16}/></button>
+  </form>
+  <p className="notice">Le GPS activé exigera une position précise dans la zone autorisée. Désactivé, aucune demande de localisation ne sera imposée. Les heures modifiées s’appliqueront aux contrôles serveur de la borne.</p>
+ </div>
+ <div className="module-panel"><h3>Rattachement des apprenants PRODUCTION</h3>
+  <p>Le rattachement est enregistré dans la fiche apprenant et dans sa dernière inscription approuvée afin que la borne utilise la bonne formation et le bon groupe.</p>
+  <form onSubmit={e=>{e.preventDefault();void send("student_assignment_update",{target_id:assignmentStudent,formation_id:assignmentFormation,group_id:assignmentGroup||null},"Formation et groupe de l’apprenant mis à jour. La borne utilisera ce rattachement pour reconnaître ses séances.");}}>
+   <label className={L}>Apprenant<select className={I} required value={assignmentStudent} onChange={e=>{const id=e.target.value;setAssignmentStudent(id);const x=(inventory.students??[]).find((s:any)=>s.id===id);setAssignmentFormation(x?.formation_id??"");setAssignmentGroup(x?.group_id??"");}}><option value="">Choisir un apprenant…</option>{(inventory.students??[]).map((s:any)=>{const p=(inventory.profiles??[]).find((x:any)=>x.id===s.id);return <option key={s.id} value={s.id}>{p?.display_name??[p?.first_name,p?.last_name].filter(Boolean).join(" ")??s.student_number??s.id} · {s.student_number??"sans matricule"}</option>;})}</select></label>
+   <div className="form-grid">
+    <label className={L}>Formation<select className={I} required value={assignmentFormation} onChange={e=>{setAssignmentFormation(e.target.value);setAssignmentGroup("");}}><option value="">Choisir une formation…</option>{(inventory.formations??[]).filter((x:any)=>x.status==="active").map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.code}</option>)}</select></label>
+    <label className={L}>Groupe<select className={I} value={assignmentGroup} onChange={e=>setAssignmentGroup(e.target.value)}><option value="">Aucun groupe</option>{(inventory.groups??[]).filter((x:any)=>x.formation_id===assignmentFormation&&x.status==="active").map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.code}</option>)}</select></label>
+   </div>
+   <button className={B} disabled={busy||!assignmentStudent||!assignmentFormation}>Enregistrer le rattachement <ShieldCheck size={16}/></button>
+  </form>
+ </div>
+
  <div className="module-panel"><h3>Formations PRODUCTION</h3>
  <form onSubmit={e=>{e.preventDefault();void send("formation_upsert",{target_id:fid||null,...f},fid?"Formation modifiée.":"Formation créée.");}}>
  <label className={L}>Fiche existante<select className={I} value={fid} onChange={e=>{let id=e.target.value;setFid(id);let x=(inventory.formations??[]).find((v:any)=>v.id===id);setF(x?{code:x.code,name:x.name,description:x.description??"",duration:x.duration??"",status:x.status}:blankF);}}><option value="">Nouvelle formation</option>{(inventory.formations??[]).map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.code}</option>)}</select></label>
