@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     const opening = String(body.payload.opening_time ?? "");
     const closing = String(body.payload.closing_time ?? "");
     const gpsEnabled = body.payload.gps_enabled;
-    if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(opening) || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(closing) || opening >= closing || typeof gpsEnabled !== "boolean") {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(opening) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(closing) || opening >= closing || typeof gpsEnabled !== "boolean") {
       return fail("valid_kiosk_hours_and_gps_setting_required", 400);
     }
     const { data, error } = await production.rpc("wdesk_owner_update_kiosk_settings", {
