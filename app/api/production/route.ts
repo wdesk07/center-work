@@ -35,6 +35,7 @@ const buildReads = (production: SupabaseClient) => ({
   operating_days: () => production.from("operating_days").select("business_date,status,opened_at,opened_by,closed_at,closed_by,updated_at").order("business_date",{ascending:false}).limit(100),
   course_suspensions: () => production.from("course_suspensions").select("id,formation_id,starts_on,ends_on,reason,created_by,created_at,revoked_at,revoked_by").order("created_at",{ascending:false}).limit(250),
   system_settings: () => production.from("system_settings").select("key,description,updated_at").order("key").limit(250),
+  kiosk_settings: () => production.from("system_settings").select("key,value,description,updated_at").in("key", ["kiosk.opening_time","kiosk.closing_time","attendance.gps_enabled"]).limit(10),
   audit_logs: () => production.from("audit_logs").select("id,actor_id,action,module,entity_type,entity_id,old_values,new_values,created_at,visibility").order("created_at",{ascending:false}).limit(1000),
 });
 
