@@ -20,7 +20,8 @@ export default function ProductionOperations({inventory,onRefresh}:Props){
   const read=(key:string,fallback:string)=>{const item=settings.find((x:any)=>x.key===key);const value=item?.value;return typeof value==="string"?value.replace(/^"|"$/g,""):fallback;};
   setOpeningTime(read("kiosk.opening_time","07:30"));
   setClosingTime(read("kiosk.closing_time","19:00"));
-  setGpsEnabled(read("attendance.gps_enabled","false")==="true");
+  const gpsValue=settings.find((x:any)=>x.key==="attendance.gps_enabled")?.value;
+  setGpsEnabled(gpsValue===true||gpsValue==="true");
  },[inventory.kiosk_settings]);
 
  const days=["","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
