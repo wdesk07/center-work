@@ -13,6 +13,8 @@ const allowedActions = new Set([
   "course_suspension_create",
   "course_suspension_revoke",
   "penalty_rule_upsert",
+  "penalty_rule_delete",
+  "penalty_delete",
   "attendance_correct",
   "justification_review",
   "qr_request_review",
@@ -235,6 +237,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "account_created_role_assignment_pending", user_id: invited.user.id, email, detail: String(assignError.message).slice(0, 160), environment: "production", writable: true }, { status: 202, headers: { "Cache-Control": "no-store, private" } });
     }
     return NextResponse.json({ ok: true, action: "account_invite", user_id: invited.user.id, email, role: role.code, assignment: assigned, environment: "production", writable: true }, { headers: { "Cache-Control": "no-store, private" } });
+  }
+
+  if (["penalty_rule_upsert","penalty_rule_delete","penalty_delete"].includes(body.action)) {
+    const { data, error } = await production.rpc("wdesk_owner_penalty_mutation", {
+      p_actor_id: ownerProfile.id,
+      p_action: body.action,
+      p_payload: body.payload,
+      p_reason: body.reason.trim(),
+      p_request_id: body.request_id,
+    });
+    if (error) {
+      const message = String(error.message ?? "penalty_mutation_failed").slice(0, 240);
+      return NextResponse.json({ error: message, environment: "production", writable: true }, { status: 422, headers: { "Cache-Control": "no-store" } });
+    }
+    return NextResponse.json({ ...data, environment: "production", writable: true }, { headers: { "Cache-Control": "no-store, private" } });
   }
 
   const { data, error } = await production.rpc("wdesk_owner_production_mutation", {
